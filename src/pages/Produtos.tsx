@@ -1,9 +1,9 @@
 import { useEffect, useState, useRef } from 'react'
-import { Plus, Search, Edit2, Trash2, X, Upload, Barcode, ChevronDown, ToggleLeft, ToggleRight } from 'lucide-react'
+import { Plus, Search, Edit2, Trash2, X, Upload, Barcode, ToggleLeft, ToggleRight, Tag } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../lib/utils'
 
-interface Categoria { id: number; nome: string }
+interface Categoria { id: number; nome: string; ordem: number; ativa: number }
 interface Unidade {
   id?: number
   tipo: 'unidade' | 'fardo' | 'caixa' | 'barril'
@@ -28,18 +28,19 @@ interface Produto {
 }
 
 const MOCK_CATEGORIAS: Categoria[] = [
-  { id: 1, nome: 'Bebidas' },
-  { id: 2, nome: 'Alimentos' },
-  { id: 3, nome: 'Limpeza' },
-  { id: 4, nome: 'Higiene' },
+  { id: 1, nome: 'Cervejas', ordem: 1, ativa: 1 },
+  { id: 2, nome: 'Refrigerantes', ordem: 2, ativa: 1 },
+  { id: 3, nome: 'Águas', ordem: 3, ativa: 1 },
+  { id: 4, nome: 'Sucos', ordem: 4, ativa: 1 },
+  { id: 5, nome: 'Vinhos', ordem: 5, ativa: 1 },
+  { id: 6, nome: 'Destilados', ordem: 6, ativa: 1 },
+  { id: 7, nome: 'Energéticos', ordem: 7, ativa: 1 },
+  { id: 8, nome: 'Outros', ordem: 8, ativa: 1 },
 ]
 
 const MOCK_PRODUTOS: Produto[] = [
-  { id: 1, nome: 'Cerveja Brahma 350ml', marca: 'Brahma', ean: '7891149101171', categoria_id: 1, categoria: 'Bebidas', estoque_atual: 48, estoque_minimo: 24, localizacao: 'A1', controle_validade: true, ativo: true, preco_venda: 4.5, unidades: [{ tipo: 'unidade', quantidade_base: 1, preco_custo: 2.8, preco_venda: 4.5 }, { tipo: 'fardo', quantidade_base: 24, preco_custo: 60, preco_venda: 96 }] },
-  { id: 2, nome: 'Refrigerante Coca-Cola 2L', marca: 'Coca-Cola', ean: '7894900011517', categoria_id: 1, categoria: 'Bebidas', estoque_atual: 12, estoque_minimo: 20, localizacao: 'A2', controle_validade: false, ativo: true, preco_venda: 9.9, unidades: [{ tipo: 'unidade', quantidade_base: 1, preco_custo: 6.5, preco_venda: 9.9 }] },
-  { id: 3, nome: 'Arroz Tio João 5kg', marca: 'Tio João', ean: '7896036095053', categoria_id: 2, categoria: 'Alimentos', estoque_atual: 30, estoque_minimo: 10, localizacao: 'B3', controle_validade: false, ativo: true, preco_venda: 28.9, unidades: [{ tipo: 'unidade', quantidade_base: 1, preco_custo: 20, preco_venda: 28.9 }] },
-  { id: 4, nome: 'Detergente Ypê 500ml', marca: 'Ypê', ean: '7896098900023', categoria_id: 3, categoria: 'Limpeza', estoque_atual: 0, estoque_minimo: 12, localizacao: 'C1', controle_validade: false, ativo: true, preco_venda: 3.5, unidades: [{ tipo: 'unidade', quantidade_base: 1, preco_custo: 1.9, preco_venda: 3.5 }] },
-  { id: 5, nome: 'Shampoo Clear 400ml', marca: 'Clear', ean: '7891150035278', categoria_id: 4, categoria: 'Higiene', estoque_atual: 8, estoque_minimo: 6, localizacao: 'D2', controle_validade: false, ativo: false, preco_venda: 18.9, unidades: [{ tipo: 'unidade', quantidade_base: 1, preco_custo: 12, preco_venda: 18.9 }] },
+  { id: 1, nome: 'Cerveja Brahma 350ml', marca: 'Brahma', ean: '7891149101171', categoria_id: 1, categoria: 'Cervejas', estoque_atual: 48, estoque_minimo: 24, localizacao: 'A1', controle_validade: true, ativo: true, preco_venda: 4.5, unidades: [{ tipo: 'unidade', quantidade_base: 1, preco_custo: 2.8, preco_venda: 4.5 }, { tipo: 'fardo', quantidade_base: 24, preco_custo: 60, preco_venda: 96 }] },
+  { id: 2, nome: 'Coca-Cola 2L', marca: 'Coca-Cola', ean: '7894900011517', categoria_id: 2, categoria: 'Refrigerantes', estoque_atual: 12, estoque_minimo: 20, localizacao: 'A2', controle_validade: false, ativo: true, preco_venda: 9.9, unidades: [{ tipo: 'unidade', quantidade_base: 1, preco_custo: 6.5, preco_venda: 9.9 }] },
 ]
 
 const EMPTY_FORM = {
@@ -47,7 +48,12 @@ const EMPTY_FORM = {
 }
 const EMPTY_UNIDADE: Unidade = { tipo: 'unidade', quantidade_base: 1, preco_custo: 0, preco_venda: 0 }
 
+type Aba = 'produtos' | 'categorias'
+
 export default function Produtos() {
+  const [aba, setAba] = useState<Aba>('produtos')
+
+  // ── estado de produtos ──────────────────────────────────────────────────
   const [produtos, setProdutos] = useState<Produto[]>([])
   const [categorias, setCategorias] = useState<Categoria[]>([])
   const [search, setSearch] = useState('')
@@ -62,6 +68,12 @@ export default function Produtos() {
   const [xmlModalOpen, setXmlModalOpen] = useState(false)
   const [xmlItems, setXmlItems] = useState<any[]>([])
   const fileRef = useRef<HTMLInputElement>(null)
+
+  // ── estado de categorias ────────────────────────────────────────────────
+  const [catModal, setCatModal] = useState(false)
+  const [editCat, setEditCat] = useState<Categoria | null>(null)
+  const [catForm, setCatForm] = useState({ nome: '', ordem: 0 })
+  const [savingCat, setSavingCat] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -81,6 +93,7 @@ export default function Produtos() {
     finally { setLoading(false) }
   }
 
+  // ── produtos ────────────────────────────────────────────────────────────
   function openNew() {
     setEditProduto(null)
     setForm({ ...EMPTY_FORM })
@@ -169,87 +182,228 @@ export default function Produtos() {
     return matchSearch && matchCat
   })
 
+  // ── categorias ──────────────────────────────────────────────────────────
+  function openNewCat() {
+    setEditCat(null)
+    const nextOrdem = categorias.length > 0 ? Math.max(...categorias.map(c => c.ordem)) + 1 : 1
+    setCatForm({ nome: '', ordem: nextOrdem })
+    setCatModal(true)
+  }
+
+  function openEditCat(c: Categoria) {
+    setEditCat(c)
+    setCatForm({ nome: c.nome, ordem: c.ordem })
+    setCatModal(true)
+  }
+
+  async function saveCat() {
+    if (!catForm.nome.trim()) { toast.error('Nome obrigatório'); return }
+    setSavingCat(true)
+    try {
+      if (!window.api) {
+        if (editCat) {
+          setCategorias(prev => prev.map(c => c.id === editCat.id ? { ...c, ...catForm } : c))
+        } else {
+          setCategorias(prev => [...prev, { id: Date.now(), nome: catForm.nome, ordem: catForm.ordem, ativa: 1 }])
+        }
+        toast.success(editCat ? 'Categoria atualizada' : 'Categoria criada')
+        setCatModal(false)
+        return
+      }
+      if (editCat) {
+        await window.api.categorias.update(editCat.id, { nome: catForm.nome, ordem: catForm.ordem, ativa: editCat.ativa })
+        toast.success('Categoria atualizada')
+      } else {
+        await window.api.categorias.create({ nome: catForm.nome, ordem: catForm.ordem })
+        toast.success('Categoria criada')
+      }
+      setCatModal(false)
+      load()
+    } catch { toast.error('Erro ao salvar categoria') }
+    finally { setSavingCat(false) }
+  }
+
+  async function deleteCat(c: Categoria) {
+    const usados = produtos.filter(p => p.categoria_id === c.id).length
+    if (usados > 0) { toast.error(`Categoria em uso por ${usados} produto(s). Mova os produtos antes de excluir.`); return }
+    if (!confirm(`Excluir a categoria "${c.nome}"?`)) return
+    if (!window.api) { setCategorias(prev => prev.filter(x => x.id !== c.id)); return }
+    try {
+      await window.api.categorias.delete(c.id)
+      toast.success('Categoria excluída')
+      load()
+    } catch { toast.error('Erro ao excluir') }
+  }
+
+  // ── render ──────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: 'var(--border)' }}>
         <h1 className="text-xl font-bold" style={{ color: 'var(--text-primary)' }}>Produtos</h1>
-        <div className="flex-1" />
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
-          <input
-            className="pl-9 pr-4 py-2 rounded-lg text-sm w-64 outline-none"
-            style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-            placeholder="Buscar por nome, EAN, marca..."
-            value={search} onChange={e => setSearch(e.target.value)}
-          />
-        </div>
-        <select
-          className="px-3 py-2 rounded-lg text-sm outline-none"
-          style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-          value={catFilter} onChange={e => setCatFilter(Number(e.target.value))}
-        >
-          <option value={0}>Todas as categorias</option>
-          {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-        </select>
-        <button onClick={importXml} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-          <Upload className="w-4 h-4" /> Importar XML
-        </button>
-        <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>
-          <Plus className="w-4 h-4" /> Novo Produto
-        </button>
-      </div>
 
-      {/* Table */}
-      <div className="flex-1 overflow-auto p-4">
-        {loading ? (
-          <div className="flex items-center justify-center h-40" style={{ color: 'var(--text-secondary)' }}>Carregando...</div>
-        ) : filtered.length === 0 ? (
-          <div className="flex items-center justify-center h-40" style={{ color: 'var(--text-secondary)' }}>Nenhum produto encontrado</div>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr style={{ borderBottom: '1px solid var(--border)' }}>
-                {['Nome', 'Marca', 'EAN', 'Categoria', 'Estoque', 'Mín.', 'Preço Venda', 'Status', ''].map(h => (
-                  <th key={h} className="pb-2 text-left font-semibold px-2" style={{ color: 'var(--text-secondary)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(p => {
-                const estoqueOk = p.estoque_atual >= p.estoque_minimo
-                const estoqueZero = p.estoque_atual === 0
-                return (
-                  <tr key={p.id} className="border-b hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--border)' }}>
-                    <td className="py-3 px-2 font-medium" style={{ color: 'var(--text-primary)' }}>{p.nome}</td>
-                    <td className="py-3 px-2" style={{ color: 'var(--text-secondary)' }}>{p.marca}</td>
-                    <td className="py-3 px-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{p.ean}</td>
-                    <td className="py-3 px-2" style={{ color: 'var(--text-secondary)' }}>{p.categoria}</td>
-                    <td className="py-3 px-2">
-                      <span className="font-bold" style={{ color: estoqueZero ? '#EF4444' : estoqueOk ? '#22C55E' : '#F5A623' }}>
-                        {p.estoque_atual}
-                      </span>
-                    </td>
-                    <td className="py-3 px-2" style={{ color: 'var(--text-secondary)' }}>{p.estoque_minimo}</td>
-                    <td className="py-3 px-2 font-medium" style={{ color: 'var(--text-primary)' }}>{formatCurrency(p.preco_venda)}</td>
-                    <td className="py-3 px-2">
-                      <span className="px-2 py-1 rounded-full text-xs font-medium" style={{ background: p.ativo ? '#22C55E22' : '#EF444422', color: p.ativo ? '#22C55E' : '#EF4444' }}>
-                        {p.ativo ? 'Ativo' : 'Inativo'}
-                      </span>
-                    </td>
-                    <td className="py-3 px-2">
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => openEdit(p)} className="p-1.5 rounded hover:opacity-70" style={{ color: '#F5A623' }}><Edit2 className="w-4 h-4" /></button>
-                        <button onClick={() => deleteProduto(p.id)} className="p-1.5 rounded hover:opacity-70" style={{ color: '#EF4444' }}><Trash2 className="w-4 h-4" /></button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
+        {/* Abas */}
+        <div className="flex rounded-lg overflow-hidden ml-2" style={{ border: '1px solid var(--border)' }}>
+          {(['produtos', 'categorias'] as Aba[]).map(t => (
+            <button
+              key={t}
+              onClick={() => setAba(t)}
+              className="px-4 py-1.5 text-sm font-medium capitalize transition-colors"
+              style={{
+                background: aba === t ? '#F5A623' : 'var(--card)',
+                color: aba === t ? '#fff' : 'var(--text-secondary)',
+              }}
+            >
+              {t === 'categorias' ? <span className="flex items-center gap-1"><Tag className="w-3.5 h-3.5" />Categorias</span> : 'Produtos'}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex-1" />
+
+        {aba === 'produtos' && (
+          <>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: 'var(--text-secondary)' }} />
+              <input
+                className="pl-9 pr-4 py-2 rounded-lg text-sm w-64 outline-none"
+                style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                placeholder="Buscar por nome, EAN, marca..."
+                value={search} onChange={e => setSearch(e.target.value)}
+              />
+            </div>
+            <select
+              className="px-3 py-2 rounded-lg text-sm outline-none"
+              style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              value={catFilter} onChange={e => setCatFilter(Number(e.target.value))}
+            >
+              <option value={0}>Todas as categorias</option>
+              {categorias.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+            </select>
+            <button onClick={importXml} className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium" style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
+              <Upload className="w-4 h-4" /> Importar XML
+            </button>
+            <button onClick={openNew} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>
+              <Plus className="w-4 h-4" /> Novo Produto
+            </button>
+          </>
+        )}
+
+        {aba === 'categorias' && (
+          <button onClick={openNewCat} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>
+            <Plus className="w-4 h-4" /> Nova Categoria
+          </button>
         )}
       </div>
+
+      {/* Conteúdo */}
+      {aba === 'produtos' && (
+        <div className="flex-1 overflow-auto p-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-40" style={{ color: 'var(--text-secondary)' }}>Carregando...</div>
+          ) : filtered.length === 0 ? (
+            <div className="flex items-center justify-center h-40" style={{ color: 'var(--text-secondary)' }}>Nenhum produto encontrado</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                  {['Nome', 'Marca', 'EAN', 'Categoria', 'Estoque', 'Mín.', 'Preço Venda', 'Status', ''].map(h => (
+                    <th key={h} className="pb-2 text-left font-semibold px-2" style={{ color: 'var(--text-secondary)' }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map(p => {
+                  const estoqueOk = p.estoque_atual >= p.estoque_minimo
+                  const estoqueZero = p.estoque_atual === 0
+                  return (
+                    <tr key={p.id} className="border-b hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--border)' }}>
+                      <td className="py-3 px-2 font-medium" style={{ color: 'var(--text-primary)' }}>{p.nome}</td>
+                      <td className="py-3 px-2" style={{ color: 'var(--text-secondary)' }}>{p.marca}</td>
+                      <td className="py-3 px-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{p.ean}</td>
+                      <td className="py-3 px-2" style={{ color: 'var(--text-secondary)' }}>{p.categoria}</td>
+                      <td className="py-3 px-2">
+                        <span className="font-bold" style={{ color: estoqueZero ? '#EF4444' : estoqueOk ? '#22C55E' : '#F5A623' }}>
+                          {p.estoque_atual}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2" style={{ color: 'var(--text-secondary)' }}>{p.estoque_minimo}</td>
+                      <td className="py-3 px-2 font-medium" style={{ color: 'var(--text-primary)' }}>{formatCurrency(p.preco_venda)}</td>
+                      <td className="py-3 px-2">
+                        <span className="px-2 py-1 rounded-full text-xs font-medium" style={{ background: p.ativo ? '#22C55E22' : '#EF444422', color: p.ativo ? '#22C55E' : '#EF4444' }}>
+                          {p.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-2">
+                        <div className="flex items-center gap-1">
+                          <button onClick={() => openEdit(p)} className="p-1.5 rounded hover:opacity-70" style={{ color: '#F5A623' }}><Edit2 className="w-4 h-4" /></button>
+                          <button onClick={() => deleteProduto(p.id)} className="p-1.5 rounded hover:opacity-70" style={{ color: '#EF4444' }}><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
+
+      {aba === 'categorias' && (
+        <div className="flex-1 overflow-auto p-4">
+          {loading ? (
+            <div className="flex items-center justify-center h-40" style={{ color: 'var(--text-secondary)' }}>Carregando...</div>
+          ) : categorias.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-40 gap-3" style={{ color: 'var(--text-secondary)' }}>
+              <Tag className="w-8 h-8 opacity-30" />
+              <p>Nenhuma categoria cadastrada</p>
+              <button onClick={openNewCat} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>
+                Criar primeira categoria
+              </button>
+            </div>
+          ) : (
+            <div className="max-w-xl">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                    <th className="pb-2 text-left font-semibold px-2" style={{ color: 'var(--text-secondary)' }}>Nome</th>
+                    <th className="pb-2 text-center font-semibold px-2 w-20" style={{ color: 'var(--text-secondary)' }}>Ordem</th>
+                    <th className="pb-2 text-center font-semibold px-2 w-28" style={{ color: 'var(--text-secondary)' }}>Produtos</th>
+                    <th className="pb-2 w-20"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {categorias.map(c => {
+                    const qtd = produtos.filter(p => p.categoria_id === c.id).length
+                    return (
+                      <tr key={c.id} className="border-b hover:opacity-80 transition-opacity" style={{ borderColor: 'var(--border)' }}>
+                        <td className="py-3 px-2 font-medium" style={{ color: 'var(--text-primary)' }}>
+                          <div className="flex items-center gap-2">
+                            <Tag className="w-3.5 h-3.5 shrink-0" style={{ color: '#F5A623' }} />
+                            {c.nome}
+                          </div>
+                        </td>
+                        <td className="py-3 px-2 text-center" style={{ color: 'var(--text-secondary)' }}>{c.ordem}</td>
+                        <td className="py-3 px-2 text-center">
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: qtd > 0 ? '#F5A62322' : 'var(--bg)', color: qtd > 0 ? '#F5A623' : 'var(--text-secondary)' }}>
+                            {qtd} produto{qtd !== 1 ? 's' : ''}
+                          </span>
+                        </td>
+                        <td className="py-3 px-2">
+                          <div className="flex items-center gap-1 justify-end">
+                            <button onClick={() => openEditCat(c)} className="p-1.5 rounded hover:opacity-70" style={{ color: '#F5A623' }}><Edit2 className="w-4 h-4" /></button>
+                            <button onClick={() => deleteCat(c)} className="p-1.5 rounded hover:opacity-70" style={{ color: '#EF4444' }}><Trash2 className="w-4 h-4" /></button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Modal Produto */}
       {modalOpen && (
@@ -371,6 +525,48 @@ export default function Produtos() {
         </div>
       )}
 
+      {/* Modal Categoria */}
+      {catModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="w-full max-w-sm rounded-xl shadow-2xl" style={{ background: 'var(--card)' }}>
+            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+              <h2 className="text-lg font-bold" style={{ color: 'var(--text-primary)' }}>{editCat ? 'Editar Categoria' : 'Nova Categoria'}</h2>
+              <button onClick={() => setCatModal(false)}><X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} /></button>
+            </div>
+            <div className="p-4 space-y-4">
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Nome *</label>
+                <input
+                  autoFocus
+                  className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                  style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                  placeholder="Ex: Cervejas"
+                  value={catForm.nome}
+                  onChange={e => setCatForm(f => ({ ...f, nome: e.target.value }))}
+                  onKeyDown={e => e.key === 'Enter' && saveCat()}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Ordem de exibição</label>
+                <input
+                  type="number"
+                  className="w-full px-3 py-2 rounded-lg text-sm outline-none"
+                  style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                  value={catForm.ordem}
+                  onChange={e => setCatForm(f => ({ ...f, ordem: Number(e.target.value) }))}
+                />
+              </div>
+              <div className="flex justify-end gap-3 pt-1">
+                <button onClick={() => setCatModal(false)} className="px-4 py-2 rounded-lg text-sm" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Cancelar</button>
+                <button onClick={saveCat} disabled={savingCat} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>
+                  {savingCat ? 'Salvando...' : 'Salvar'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* XML Preview Modal */}
       {xmlModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
@@ -403,6 +599,8 @@ export default function Produtos() {
           </div>
         </div>
       )}
+
+      <input ref={fileRef} type="file" accept=".xml" className="hidden" />
     </div>
   )
 }

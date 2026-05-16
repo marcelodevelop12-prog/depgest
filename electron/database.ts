@@ -46,6 +46,16 @@ function createSchema() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    INSERT OR IGNORE INTO categorias (id, nome, ordem) VALUES
+      (1, 'Cervejas',     1),
+      (2, 'Refrigerantes',2),
+      (3, 'Águas',        3),
+      (4, 'Sucos',        4),
+      (5, 'Vinhos',       5),
+      (6, 'Destilados',   6),
+      (7, 'Energéticos',  7),
+      (8, 'Outros',       8);
+
     CREATE TABLE IF NOT EXISTS produtos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       nome TEXT NOT NULL,
