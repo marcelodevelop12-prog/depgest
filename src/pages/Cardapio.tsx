@@ -112,7 +112,7 @@ export default function Cardapio() {
     }
   }
 
-  const urlCardapio = `https://depgest.vercel.app/loja/${codigoLoja}`
+  const urlCardapio = `https://vercel-app-lime-alpha.vercel.app/loja/${codigoLoja}`
 
   return (
     <div className="h-full flex flex-col overflow-hidden">

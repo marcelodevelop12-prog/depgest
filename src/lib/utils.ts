@@ -51,7 +51,7 @@ export function whatsappUrl(telefone: string, mensagem: string): string {
 }
 
 export function gerarLinkRastreio(token: string): string {
-  return `${import.meta.env.VITE_RASTREIO_URL || 'https://depgest.vercel.app'}/rastreio/${token}`
+  return `${import.meta.env.VITE_RASTREIO_URL || 'https://vercel-app-lime-alpha.vercel.app'}/rastreio/${token}`
 }
 
 declare global {
