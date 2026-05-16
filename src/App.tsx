@@ -52,7 +52,7 @@ export default function App() {
 
       // Verifica se loja está configurada
       const loja = await window.api.config.getLoja()
-      if (!loja?.loja_nome) {
+      if (!loja?.nome) {
         setStatus('onboarding')
         return
       }
