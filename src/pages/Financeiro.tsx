@@ -317,7 +317,6 @@ function NovaContaModal({ tipo, onClose, onSave }: { tipo: 'pagar' | 'receber'; 
           { key: 'descricao', label: 'Descrição *', placeholder: 'Ex: Fornecedor ABC' },
           { key: 'valor', label: 'Valor *', placeholder: '0,00', type: 'number' },
           { key: 'vencimento', label: 'Vencimento', placeholder: '', type: 'date' },
-          { key: 'categoria', label: 'Categoria', placeholder: 'Ex: Aluguel, Energia...' },
         ].map(f => (
           <div key={f.key}>
             <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>{f.label}</label>
@@ -327,6 +326,21 @@ function NovaContaModal({ tipo, onClose, onSave }: { tipo: 'pagar' | 'receber'; 
               style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
           </div>
         ))}
+        <div>
+          <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>Categoria</label>
+          <select
+            value={data.categoria}
+            onChange={e => setData(d => ({ ...d, categoria: e.target.value }))}
+            className="w-full px-3 py-2.5 rounded-xl text-sm"
+            style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+          >
+            <option value="">— Selecione —</option>
+            {(tipo === 'pagar'
+              ? ['Aluguel', 'Energia Elétrica', 'Água', 'Internet', 'Telefone', 'Contador', 'IPTU', 'Salários', 'Outros']
+              : ['Vendas', 'Fiado', 'Outros']
+            ).map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
         <button onClick={salvar} className="w-full py-3 rounded-xl font-semibold text-sm" style={{ background: '#F5A623', color: '#000' }}>
           Salvar Conta
         </button>
