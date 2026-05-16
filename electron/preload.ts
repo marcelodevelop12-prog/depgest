@@ -158,7 +158,11 @@ const api = {
   cardapio: {
     sync: () => ipcRenderer.invoke('cardapio:sync'),
     getProdutos: () => ipcRenderer.invoke('cardapio:get-produtos'),
-    updateProdutos: (produtos: unknown[]) => ipcRenderer.invoke('cardapio:update-produtos', produtos),
+    updateProdutos: (produtoIds: number[]) => ipcRenderer.invoke('cardapio:update-produtos', produtoIds),
+    initRealtime: () => ipcRenderer.send('cardapio:init-realtime'),
+    onPedidoNovo: (cb: (pedido: unknown) => void) => {
+      ipcRenderer.on('pedido-online:novo', (_e, pedido) => cb(pedido))
+    },
   },
 }
 

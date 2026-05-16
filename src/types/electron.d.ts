@@ -125,7 +125,9 @@ export interface ElectronAPI {
   cardapio: {
     sync: () => Promise<any>
     getProdutos: () => Promise<any[]>
-    updateProdutos: (produtos: any[]) => Promise<any>
+    updateProdutos: (produtoIds: number[]) => Promise<any>
+    initRealtime: () => void
+    onPedidoNovo: (cb: (pedido: unknown) => void) => void
   }
 }
 

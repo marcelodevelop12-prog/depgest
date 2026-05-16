@@ -20,6 +20,14 @@ export default function Cardapio() {
     loadConfig()
     loadProdutos()
     loadPedidosOnline()
+
+    // Listener de pedido online novo (notificação realtime do main process)
+    if (window.api) {
+      window.api.cardapio.onPedidoNovo(() => {
+        loadPedidosOnline()
+        toast('Novo pedido online recebido!', { icon: '🛒' })
+      })
+    }
   }, [])
 
   async function loadConfig() {
@@ -78,14 +86,16 @@ export default function Cardapio() {
   }
 
   async function sincronizar() {
+    if (selecionados.size === 0) return
     setSyncing(true)
     try {
       if (window.api) {
-        await window.api.produtos.syncCardapio(Array.from(selecionados))
+        const result = await window.api.cardapio.updateProdutos(Array.from(selecionados))
+        if (!result?.ok) throw new Error(result?.erro || 'Falha na sincronização')
       }
-      toast.success(`${selecionados.size} produto(s) sincronizados!`)
-    } catch {
-      toast.error('Erro ao sincronizar')
+      toast.success(`${selecionados.size} produto(s) sincronizados com categorias e preços!`)
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao sincronizar')
     } finally {
       setSyncing(false)
     }

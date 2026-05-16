@@ -1,8 +1,16 @@
-import { app, BrowserWindow, ipcMain, shell, dialog } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, Notification } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import path from 'path'
 import fs from 'fs'
-import { initDatabase } from './database'
+import { createClient } from '@supabase/supabase-js'
+import ws from 'ws'
+import { initDatabase, getDb } from './database'
+
+const supabase = createClient(
+  'https://vxrhlljvjqdbpfngpzro.supabase.co',
+  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4cmhsbGp2anFkYnBmbmdwenJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NzQ1MDAsImV4cCI6MjA5NDQ1MDUwMH0.UTzP5lf2x7GnEw8nsuoe_qnywe-JpO1ApDtfS1RLjD0',
+  { realtime: { transport: ws as any } }
+)
 import { registerLicenseHandlers } from './ipc/licenca'
 import { registerProdutoHandlers } from './ipc/produtos'
 import { registerClienteHandlers } from './ipc/clientes'
@@ -82,6 +90,12 @@ app.whenReady().then(async () => {
 
   createWindow()
 
+  // Inicia listener de pedidos online (se licença já ativa)
+  tryStartPedidosRealtime()
+
+  // Permite re-inicializar após ativação de licença
+  ipcMain.on('cardapio:init-realtime', () => tryStartPedidosRealtime())
+
   if (!isDev) {
     autoUpdater.checkForUpdatesAndNotify()
   }
@@ -94,6 +108,45 @@ app.on('window-all-closed', () => {
 app.on('activate', () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow()
 })
+
+let realtimeStarted = false
+
+function tryStartPedidosRealtime() {
+  if (realtimeStarted) return
+  try {
+    const licenca = getDb().prepare('SELECT supabase_loja_id, ativa FROM licenca LIMIT 1').get() as any
+    if (!licenca?.ativa || !licenca.supabase_loja_id) return
+
+    const lojaId = licenca.supabase_loja_id
+    realtimeStarted = true
+
+    supabase
+      .channel('pedidos-online-desktop')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'pedidos_online', filter: `loja_id=eq.${lojaId}` },
+        (payload) => {
+          const pedido = payload.new as any
+
+          // Envia para o renderer (atualiza badge/contador na UI)
+          mainWindow?.webContents.send('pedido-online:novo', pedido)
+
+          // Notificação nativa do Windows
+          if (Notification.isSupported()) {
+            const total = Number(pedido.total || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+            new Notification({
+              title: 'Novo pedido online!',
+              body: `${pedido.cliente_nome} · ${total}`,
+              icon: path.join(__dirname, '../public/icon.ico'),
+            }).show()
+          }
+        }
+      )
+      .subscribe()
+  } catch {
+    // BD ainda não inicializado ou licença inexistente — silencioso
+  }
+}
 
 function registerWindowHandlers() {
   ipcMain.on('window:minimize', () => mainWindow?.minimize())
