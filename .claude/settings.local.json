@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(git -C C:\\\\Users\\\\ANDERSON\\\\DEPGEST log --oneline -5 2>&1)"
+    ]
+  }
+}

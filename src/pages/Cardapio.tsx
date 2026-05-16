@@ -1,0 +1,364 @@
+import { useEffect, useState } from 'react'
+import { Globe, Power, RefreshCw, ExternalLink, Package, Clock, DollarSign, Truck, ShoppingBag, AlertCircle } from 'lucide-react'
+import toast from 'react-hot-toast'
+import { formatCurrency } from '../lib/utils'
+
+export default function Cardapio() {
+  const [ativo, setAtivo] = useState(false)
+  const [codigoLoja, setCodigoLoja] = useState('')
+  const [produtos, setProdutos] = useState<any[]>([])
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set())
+  const [syncing, setSyncing] = useState(false)
+  const [config, setConfig] = useState({
+    taxa_entrega: '0', pedido_minimo: '0', raio_entrega_km: '5',
+    horario_abertura: '08:00', horario_fechamento: '22:00',
+  })
+  const [pedidosOnline, setPedidosOnline] = useState<any[]>([])
+  const [aba, setAba] = useState<'config' | 'produtos' | 'pedidos'>('config')
+
+  useEffect(() => {
+    loadConfig()
+    loadProdutos()
+    loadPedidosOnline()
+  }, [])
+
+  async function loadConfig() {
+    if (!window.api) {
+      setCodigoLoja('depjoao')
+      setAtivo(false)
+      return
+    }
+    const cfg = await window.api.config.get()
+    setCodigoLoja(cfg.loja_codigo || '')
+    setAtivo(cfg.loja_cardapio_ativo === 'true')
+    setConfig({
+      taxa_entrega: cfg.loja_taxa_entrega || '0',
+      pedido_minimo: cfg.loja_pedido_minimo || '0',
+      raio_entrega_km: cfg.loja_raio_entrega_km || '5',
+      horario_abertura: '08:00',
+      horario_fechamento: '22:00',
+    })
+  }
+
+  async function loadProdutos() {
+    if (!window.api) { setProdutos(mockProdutos); return }
+    const result = await window.api.produtos.list({ ativo: true })
+    setProdutos(result)
+  }
+
+  async function loadPedidosOnline() {
+    if (!window.api) { setPedidosOnline([]); return }
+    const result = await window.api.pedidos.getOnline()
+    setPedidosOnline(result || [])
+  }
+
+  async function toggleAtivo() {
+    const novoStatus = !ativo
+    setAtivo(novoStatus)
+    if (window.api) {
+      await window.api.config.save({ loja_cardapio_ativo: String(novoStatus) })
+      await window.api.config.saveLoja({ cardapio_ativo: novoStatus })
+    }
+    toast.success(novoStatus ? 'Cardápio online ativado!' : 'Cardápio online desativado')
+  }
+
+  async function salvarConfig() {
+    if (!window.api) { toast.success('Configuração salva (mock)'); return }
+    await window.api.config.save({
+      loja_taxa_entrega: config.taxa_entrega,
+      loja_pedido_minimo: config.pedido_minimo,
+      loja_raio_entrega_km: config.raio_entrega_km,
+    })
+    await window.api.config.saveLoja({
+      taxa_entrega: parseFloat(config.taxa_entrega),
+      pedido_minimo: parseFloat(config.pedido_minimo),
+      raio_entrega_km: parseFloat(config.raio_entrega_km),
+    })
+    toast.success('Configurações salvas!')
+  }
+
+  async function sincronizar() {
+    setSyncing(true)
+    try {
+      if (window.api) {
+        await window.api.produtos.syncCardapio(Array.from(selecionados))
+      }
+      toast.success(`${selecionados.size} produto(s) sincronizados!`)
+    } catch {
+      toast.error('Erro ao sincronizar')
+    } finally {
+      setSyncing(false)
+    }
+  }
+
+  async function aceitarPedido(pedidoOnlineId: string) {
+    if (!window.api) { toast.success('Pedido aceito (mock)'); return }
+    const result = await window.api.pedidos.aceitarOnline(pedidoOnlineId)
+    if (result.ok) {
+      toast.success(`Pedido #${result.numero} criado!`)
+      loadPedidosOnline()
+    } else {
+      toast.error(result.erro || 'Erro ao aceitar pedido')
+    }
+  }
+
+  const urlCardapio = `https://depgest.vercel.app/loja/${codigoLoja}`
+
+  return (
+    <div className="h-full flex flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex-shrink-0 px-6 pt-5 pb-4" style={{ borderBottom: '1px solid var(--border)' }}>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl font-bold flex items-center gap-2">
+              <Globe size={20} style={{ color: '#F5A623' }} />
+              Cardápio Online
+            </h1>
+            <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>
+              Receba pedidos pela internet
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            {pedidosOnline.length > 0 && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium"
+                style={{ background: '#F5A62320', color: '#F5A623', border: '1px solid #F5A62340' }}>
+                <ShoppingBag size={12} />
+                {pedidosOnline.length} pedido(s) aguardando
+              </div>
+            )}
+            <button onClick={toggleAtivo}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-colors"
+              style={{
+                background: ativo ? '#22C55E20' : 'var(--card)',
+                color: ativo ? '#22C55E' : 'var(--text-secondary)',
+                border: `1px solid ${ativo ? '#22C55E40' : 'var(--border)'}`,
+              }}>
+              <Power size={15} />
+              {ativo ? 'Online' : 'Offline'}
+            </button>
+          </div>
+        </div>
+
+        {/* URL do cardápio */}
+        {codigoLoja && (
+          <div className="mt-3 flex items-center gap-2 px-3 py-2 rounded-xl text-xs"
+            style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+            <Globe size={12} style={{ color: 'var(--text-secondary)' }} />
+            <span className="flex-1 truncate font-mono" style={{ color: 'var(--text-secondary)' }}>{urlCardapio}</span>
+            <button onClick={() => { navigator.clipboard.writeText(urlCardapio); toast.success('Link copiado!') }}
+              className="text-xs px-2 py-0.5 rounded-md hover:bg-white/10 transition-colors"
+              style={{ color: '#F5A623' }}>
+              Copiar
+            </button>
+            <button onClick={() => window.api?.system.openExternal(urlCardapio)}
+              className="hover:text-white transition-colors" style={{ color: 'var(--text-secondary)' }}>
+              <ExternalLink size={12} />
+            </button>
+          </div>
+        )}
+
+        {/* Tabs */}
+        <div className="flex gap-1 mt-4">
+          {[
+            { id: 'config', label: 'Configurações' },
+            { id: 'produtos', label: `Produtos (${selecionados.size} selecionados)` },
+            { id: 'pedidos', label: `Pedidos Online${pedidosOnline.length > 0 ? ` (${pedidosOnline.length})` : ''}` },
+          ].map(t => (
+            <button key={t.id} onClick={() => setAba(t.id as any)}
+              className="px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              style={{
+                background: aba === t.id ? '#F5A62320' : 'transparent',
+                color: aba === t.id ? '#F5A623' : 'var(--text-secondary)',
+                border: `1px solid ${aba === t.id ? '#F5A62340' : 'transparent'}`,
+              }}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto scroll-area p-6">
+        {/* Configurações */}
+        {aba === 'config' && (
+          <div className="max-w-lg space-y-5">
+            {!ativo && (
+              <div className="flex items-start gap-3 p-4 rounded-xl" style={{ background: '#F5A62310', border: '1px solid #F5A62330' }}>
+                <AlertCircle size={16} style={{ color: '#F5A623', marginTop: 2 }} />
+                <div className="text-sm">
+                  <p className="font-medium" style={{ color: '#F5A623' }}>Cardápio desativado</p>
+                  <p style={{ color: 'var(--text-secondary)' }}>Clientes não poderão fazer pedidos enquanto o cardápio estiver offline.</p>
+                </div>
+              </div>
+            )}
+
+            <div className="rounded-xl p-5 space-y-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+              <h3 className="font-semibold flex items-center gap-2"><Truck size={16} style={{ color: '#F5A623' }} /> Entrega</h3>
+              {[
+                { key: 'taxa_entrega', label: 'Taxa de entrega (R$)', placeholder: '0,00', prefix: 'R$' },
+                { key: 'pedido_minimo', label: 'Pedido mínimo (R$)', placeholder: '0,00', prefix: 'R$' },
+                { key: 'raio_entrega_km', label: 'Raio de entrega (km)', placeholder: '5', prefix: 'km' },
+              ].map(f => (
+                <div key={f.key}>
+                  <label className="block text-xs mb-1.5" style={{ color: 'var(--text-secondary)' }}>{f.label}</label>
+                  <div className="flex items-center gap-2">
+                    <input type="number" value={(config as any)[f.key]}
+                      onChange={e => setConfig(c => ({ ...c, [f.key]: e.target.value }))}
+                      className="flex-1 px-3 py-2.5 rounded-xl text-sm"
+                      style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                    <span className="text-sm" style={{ color: 'var(--text-secondary)' }}>{f.prefix}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="rounded-xl p-5 space-y-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+              <h3 className="font-semibold flex items-center gap-2"><Clock size={16} style={{ color: '#F5A623' }} /> Horário de Funcionamento</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: 'var(--text-secondary)' }}>Abertura</label>
+                  <input type="time" value={config.horario_abertura}
+                    onChange={e => setConfig(c => ({ ...c, horario_abertura: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: 'var(--text-secondary)' }}>Fechamento</label>
+                  <input type="time" value={config.horario_fechamento}
+                    onChange={e => setConfig(c => ({ ...c, horario_fechamento: e.target.value }))}
+                    className="w-full px-3 py-2.5 rounded-xl text-sm"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                </div>
+              </div>
+            </div>
+
+            <button onClick={salvarConfig}
+              className="w-full py-3 rounded-xl font-semibold text-sm"
+              style={{ background: '#F5A623', color: '#000' }}>
+              Salvar Configurações
+            </button>
+          </div>
+        )}
+
+        {/* Produtos */}
+        {aba === 'produtos' && (
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                Selecione quais produtos aparecem no cardápio online
+              </p>
+              <button onClick={sincronizar} disabled={syncing || selecionados.size === 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50"
+                style={{ background: '#3B82F6', color: '#fff' }}>
+                <RefreshCw size={14} className={syncing ? 'spinner' : ''} />
+                Sincronizar ({selecionados.size})
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {produtos.map(p => (
+                <div key={p.id}
+                  onClick={() => setSelecionados(prev => {
+                    const next = new Set(prev)
+                    if (next.has(p.id)) next.delete(p.id)
+                    else next.add(p.id)
+                    return next
+                  })}
+                  className="flex items-center gap-4 p-4 rounded-xl cursor-pointer transition-colors hover:bg-white/5"
+                  style={{
+                    background: selecionados.has(p.id) ? '#F5A62310' : 'var(--card)',
+                    border: `1px solid ${selecionados.has(p.id) ? '#F5A62340' : 'var(--border)'}`,
+                  }}>
+                  <div className="w-5 h-5 rounded flex items-center justify-center flex-shrink-0"
+                    style={{
+                      background: selecionados.has(p.id) ? '#F5A623' : 'var(--bg)',
+                      border: `1px solid ${selecionados.has(p.id) ? '#F5A623' : 'var(--border)'}`,
+                    }}>
+                    {selecionados.has(p.id) && <span className="text-xs font-bold text-black">✓</span>}
+                  </div>
+                  {p.foto_path && (
+                    <img src={`file://${p.foto_path}`} className="w-12 h-12 rounded-lg object-cover" />
+                  )}
+                  {!p.foto_path && (
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: 'var(--bg)' }}>
+                      <Package size={20} style={{ color: 'var(--text-secondary)' }} />
+                    </div>
+                  )}
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{p.nome}</p>
+                    <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{p.categoria_nome} {p.marca ? `• ${p.marca}` : ''}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold" style={{ color: '#F5A623' }}>
+                      {p.preco_venda ? formatCurrency(p.preco_venda) : '—'}
+                    </p>
+                  </div>
+                </div>
+              ))}
+
+              {produtos.length === 0 && (
+                <div className="py-12 text-center" style={{ color: 'var(--text-secondary)' }}>
+                  <Package size={40} className="mx-auto mb-3 opacity-20" />
+                  <p className="text-sm">Nenhum produto cadastrado</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Pedidos Online */}
+        {aba === 'pedidos' && (
+          <div className="space-y-3">
+            {pedidosOnline.length === 0 ? (
+              <div className="py-16 text-center" style={{ color: 'var(--text-secondary)' }}>
+                <ShoppingBag size={48} className="mx-auto mb-4 opacity-20" />
+                <p className="text-sm font-medium">Nenhum pedido aguardando</p>
+                <p className="text-xs mt-1">Pedidos online aparecerão aqui em tempo real</p>
+              </div>
+            ) : (
+              pedidosOnline.map((p: any) => (
+                <div key={p.id} className="rounded-xl p-5" style={{ background: 'var(--card)', border: '1px solid #F5A62340' }}>
+                  <div className="flex items-start justify-between mb-3">
+                    <div>
+                      <p className="font-semibold">{p.cliente_nome}</p>
+                      <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{p.cliente_telefone}</p>
+                    </div>
+                    <span className="text-xs px-2 py-1 rounded-full status-novo">Novo Online</span>
+                  </div>
+                  <div className="text-xs mb-3" style={{ color: 'var(--text-secondary)' }}>
+                    <p>{p.tipo_entrega === 'entrega' ? `📍 ${p.cliente_endereco}` : '🏪 Retirada no local'}</p>
+                    <p className="mt-1">💳 {p.forma_pagamento}</p>
+                    {p.observacao && <p className="mt-1">📝 {p.observacao}</p>}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-lg" style={{ color: '#F5A623' }}>
+                      {formatCurrency(p.total)}
+                    </span>
+                    <button onClick={() => aceitarPedido(p.id)}
+                      className="px-4 py-2 rounded-xl text-sm font-semibold"
+                      style={{ background: '#22C55E', color: '#fff' }}>
+                      ✓ Aceitar Pedido
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+
+            <button onClick={loadPedidosOnline}
+              className="w-full py-2 rounded-xl text-sm transition-colors hover:bg-white/5"
+              style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+              <RefreshCw size={14} className="inline mr-2" />
+              Atualizar
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+const mockProdutos = [
+  { id: 1, nome: 'Brahma 600ml', marca: 'Ambev', categoria_nome: 'Cervejas', preco_venda: 7.5 },
+  { id: 2, nome: 'Skol Lata 350ml', marca: 'Ambev', categoria_nome: 'Cervejas', preco_venda: 4.0 },
+  { id: 3, nome: 'Heineken Long Neck', marca: 'Heineken', categoria_nome: 'Cervejas', preco_venda: 9.9 },
+]
