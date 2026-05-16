@@ -269,6 +269,16 @@ function createSchema() {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
+    INSERT OR IGNORE INTO financeiro_contas (id, tipo, descricao, valor, vencimento, pago, categoria) VALUES
+      (1, 'pagar', 'Aluguel',          0, date('now','start of month','+1 month','9 days'), 0, 'Fixo'),
+      (2, 'pagar', 'Energia Elétrica', 0, date('now','start of month','+1 month','9 days'), 0, 'Fixo'),
+      (3, 'pagar', 'Água',             0, date('now','start of month','+1 month','9 days'), 0, 'Fixo'),
+      (4, 'pagar', 'Internet',         0, date('now','start of month','+1 month','9 days'), 0, 'Fixo'),
+      (5, 'pagar', 'Telefone',         0, date('now','start of month','+1 month','9 days'), 0, 'Fixo'),
+      (6, 'pagar', 'Contador',         0, date('now','start of month','+1 month','9 days'), 0, 'Fixo'),
+      (7, 'pagar', 'IPTU',             0, date('now','start of month','+1 month','9 days'), 0, 'Fixo'),
+      (8, 'pagar', 'Salários',         0, date('now','start of month','+1 month','9 days'), 0, 'Fixo');
+
     CREATE TABLE IF NOT EXISTS sync_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       tabela TEXT NOT NULL,
