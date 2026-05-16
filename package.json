@@ -2,6 +2,7 @@
   "name": "depgest",
   "version": "1.0.0",
   "description": "Sistema de Gestão para Depósito de Bebidas",
+  "author": "DepGest",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
