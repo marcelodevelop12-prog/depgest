@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { ShoppingCart, Plus, Minus, X, Truck, ChevronRight, Package, Beer } from 'lucide-react'
+import { ShoppingCart, Plus, Minus, X, Truck, ChevronRight, Package, Beer, Clock } from 'lucide-react'
 import { supabase, formatCurrency } from '../lib/supabase'
 
 interface ItemCarrinho {
@@ -248,28 +248,6 @@ export default function Loja() {
   )
 
   return (
-<<<<<<< HEAD
-    <div className="min-h-screen text-white" style={{ background: '#0a0a0a' }}>
-      {/* ── HEADER ─────────────────────────────────────────────────── */}
-      <div className="sticky top-0 z-30 backdrop-blur" style={{ background: 'rgba(17,17,17,0.92)', borderBottom: '1px solid #1f1f1f' }}>
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3">
-          {loja.logo_url ? (
-            <img src={loja.logo_url} className="w-11 h-11 rounded-full object-cover ring-2" style={{ ['--tw-ring-color' as any]: '#F5A62330' }} />
-          ) : (
-            <div className="w-11 h-11 rounded-full flex items-center justify-center" style={{ background: '#F5A62315', border: '1px solid #F5A62340' }}>
-              <Beer size={20} style={{ color: '#F5A623' }} />
-            </div>
-          )}
-          <div className="flex-1 min-w-0">
-            <h1 className="font-bold text-base sm:text-lg truncate">{loja.nome}</h1>
-            <div className="flex items-center gap-3 text-[11px] text-gray-400 mt-0.5">
-              <span className="flex items-center gap-1">
-                <Truck size={11} />
-                {loja.taxa_entrega > 0 ? `${formatCurrency(loja.taxa_entrega)} entrega` : 'Entrega grátis'}
-              </span>
-              {loja.pedido_minimo > 0 && <span>Mín. {formatCurrency(loja.pedido_minimo)}</span>}
-            </div>
-=======
     <div className="min-h-screen" style={{ background: '#0a0a0a' }}>
       {/* Header sticky */}
       <div className="sticky top-0 z-30" style={{ background: '#111' }}>
@@ -299,13 +277,13 @@ export default function Loja() {
             {/* Badge aberto / fechado */}
             <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
               style={{
-                background: loja.aberto ? '#16a34a1a' : '#dc26261a',
-                border: `1px solid ${loja.aberto ? '#16a34a40' : '#dc262640'}`,
-                color: loja.aberto ? '#4ade80' : '#f87171',
+                background: loja.cardapio_ativo ? '#16a34a1a' : '#dc26261a',
+                border: `1px solid ${loja.cardapio_ativo ? '#16a34a40' : '#dc262640'}`,
+                color: loja.cardapio_ativo ? '#4ade80' : '#f87171',
               }}>
               <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ background: loja.aberto ? '#4ade80' : '#f87171' }} />
-              {loja.aberto ? 'Aberto' : 'Fechado no momento'}
+                style={{ background: loja.cardapio_ativo ? '#4ade80' : '#f87171' }} />
+              {loja.cardapio_ativo ? 'Aberto' : 'Fechado no momento'}
             </div>
 
             {/* Botão carrinho (quando há itens) */}
@@ -321,7 +299,6 @@ export default function Loja() {
                 </span>
               </button>
             )}
->>>>>>> claude/gifted-mclean-bb2e4b
           </div>
           {totalItens > 0 && (
             <button onClick={() => setShowCarrinho(true)}
@@ -337,17 +314,6 @@ export default function Loja() {
           )}
         </div>
 
-<<<<<<< HEAD
-        {/* ── NAV de Categorias ────────────────────────────────────── */}
-        {categorias.length > 0 && (
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-3 flex gap-2 overflow-x-auto scrollbar-none">
-            <button onClick={() => setCategoriaAtiva(null)}
-              className="flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
-              style={{
-                background: !categoriaAtiva ? '#F5A623' : '#1a1a1a',
-                color: !categoriaAtiva ? '#000' : '#999',
-                border: !categoriaAtiva ? 'none' : '1px solid #262626',
-=======
         {/* Linha 2: barra de informações */}
         <div className="overflow-x-auto scrollbar-none" style={{ borderTop: '1px solid #1a1a1a', borderBottom: '1px solid #1a1a1a' }}>
           <div className="flex items-center gap-0 px-4 py-2.5 text-xs whitespace-nowrap min-w-max">
@@ -408,25 +374,16 @@ export default function Loja() {
                 borderColor: !categoriaAtiva ? '#F5A623' : 'transparent',
                 color: !categoriaAtiva ? '#F5A623' : '#666',
                 marginBottom: -1,
->>>>>>> claude/gifted-mclean-bb2e4b
               }}>
               Todos
             </button>
             {categorias.map(c => (
               <button key={c.id} onClick={() => setCategoriaAtiva(c.id)}
-<<<<<<< HEAD
-                className="flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-semibold transition-all"
-                style={{
-                  background: categoriaAtiva === c.id ? '#F5A623' : '#1a1a1a',
-                  color: categoriaAtiva === c.id ? '#000' : '#999',
-                  border: categoriaAtiva === c.id ? 'none' : '1px solid #262626',
-=======
                 className="flex-shrink-0 flex items-center gap-1 px-4 py-3 text-xs font-medium whitespace-nowrap transition-colors border-b-2"
                 style={{
                   borderColor: categoriaAtiva === c.id ? '#F5A623' : 'transparent',
                   color: categoriaAtiva === c.id ? '#F5A623' : '#666',
                   marginBottom: -1,
->>>>>>> claude/gifted-mclean-bb2e4b
                 }}>
                 {c.emoji && <span>{c.emoji}</span>}
                 {c.nome}
