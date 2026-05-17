@@ -28,6 +28,7 @@ export interface ElectronAPI {
     save: (data: Record<string, unknown>) => Promise<boolean>
     saveLoja: (data: Record<string, unknown>) => Promise<boolean>
     getLoja: () => Promise<any>
+    uploadLogo: (filePath: string) => Promise<string>
     backup: (destPath: string) => Promise<boolean>
     restore: (srcPath: string) => Promise<boolean>
   }
