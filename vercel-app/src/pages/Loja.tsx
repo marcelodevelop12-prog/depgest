@@ -191,29 +191,49 @@ export default function Loja() {
 
   return (
     <div className="min-h-screen" style={{ background: '#0a0a0a' }}>
-      {/* Header */}
-      <div className="sticky top-0 z-30" style={{ background: '#111', borderBottom: '1px solid #222' }}>
-        <div className="max-w-2xl mx-auto px-4 py-4">
+      {/* Header sticky */}
+      <div className="sticky top-0 z-30" style={{ background: '#111' }}>
+
+        {/* Linha 1: logo + nome + badge aberto/fechado + carrinho */}
+        <div className="max-w-2xl mx-auto px-4 pt-4 pb-3">
           <div className="flex items-center gap-3">
-            {loja.logo_url && <img src={loja.logo_url} className="w-10 h-10 rounded-full object-cover" />}
-            <div className="flex-1">
-              <h1 className="font-bold">{loja.nome}</h1>
-              <div className="flex items-center gap-3 text-xs text-gray-500 mt-0.5">
-                {loja.taxa_entrega > 0 ? (
-                  <span className="flex items-center gap-1"><Truck size={10} />{formatCurrency(loja.taxa_entrega)} entrega</span>
-                ) : (
-                  <span className="flex items-center gap-1"><Truck size={10} />Entrega grátis</span>
-                )}
-                {loja.pedido_minimo > 0 && (
-                  <span>Mín. {formatCurrency(loja.pedido_minimo)}</span>
-                )}
-              </div>
+            {/* Logo circular com borda âmbar */}
+            <div className="flex-shrink-0 rounded-full p-0.5" style={{ border: '2px solid #F5A623' }}>
+              {loja.logo_url
+                ? <img src={loja.logo_url} className="w-12 h-12 rounded-full object-cover block" />
+                : <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
+                    style={{ background: '#1a1a1a' }}>🍔</div>
+              }
             </div>
+
+            {/* Nome + cidade */}
+            <div className="flex-1 min-w-0">
+              <h1 className="font-bold text-base leading-tight truncate">{loja.nome}</h1>
+              {(loja.cidade || loja.estado) && (
+                <p className="text-xs text-gray-500 mt-0.5 uppercase tracking-widest">
+                  {[loja.cidade, loja.estado].filter(Boolean).join(' · ')}
+                </p>
+              )}
+            </div>
+
+            {/* Badge aberto / fechado */}
+            <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+              style={{
+                background: loja.aberto ? '#16a34a1a' : '#dc26261a',
+                border: `1px solid ${loja.aberto ? '#16a34a40' : '#dc262640'}`,
+                color: loja.aberto ? '#4ade80' : '#f87171',
+              }}>
+              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
+                style={{ background: loja.aberto ? '#4ade80' : '#f87171' }} />
+              {loja.aberto ? 'Aberto' : 'Fechado no momento'}
+            </div>
+
+            {/* Botão carrinho (quando há itens) */}
             {carrinho.length > 0 && (
               <button onClick={() => setShowCarrinho(true)}
-                className="relative flex items-center gap-2 px-4 py-2 rounded-xl font-semibold text-sm"
+                className="relative flex items-center gap-2 px-3 py-2 rounded-xl font-semibold text-sm flex-shrink-0"
                 style={{ background: '#F5A623', color: '#000' }}>
-                <ShoppingCart size={16} />
+                <ShoppingCart size={15} />
                 {formatCurrency(subtotal)}
                 <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center"
                   style={{ background: '#EF4444', color: '#fff' }}>
@@ -224,24 +244,78 @@ export default function Loja() {
           </div>
         </div>
 
-        {/* Categorias */}
+        {/* Linha 2: barra de informações */}
+        <div className="overflow-x-auto scrollbar-none" style={{ borderTop: '1px solid #1a1a1a', borderBottom: '1px solid #1a1a1a' }}>
+          <div className="flex items-center gap-0 px-4 py-2.5 text-xs whitespace-nowrap min-w-max">
+            <span className="flex items-center gap-1.5 text-gray-400">
+              <Truck size={12} style={{ color: '#F5A623' }} />
+              Entrega a partir de&nbsp;
+              <span className="font-semibold" style={{ color: '#F5A623' }}>
+                {loja.taxa_entrega > 0 ? formatCurrency(loja.taxa_entrega) : 'R$ 0,00'}
+              </span>
+            </span>
+
+            <span className="mx-3 text-gray-700">·</span>
+
+            <span className="flex items-center gap-1.5 text-gray-400">
+              📋&nbsp;Pedido mínimo&nbsp;
+              <span className="font-semibold" style={{ color: '#F5A623' }}>
+                {formatCurrency(loja.pedido_minimo || 0)}
+              </span>
+            </span>
+
+            {(loja.tempo_entrega || loja.tempo_retirada) && (
+              <>
+                <span className="mx-3 text-gray-700">·</span>
+                <span className="flex items-center gap-1.5 text-gray-400">
+                  <Clock size={12} />
+                  {loja.tempo_entrega && (
+                    <>Entrega&nbsp;<span className="font-semibold" style={{ color: '#F5A623' }}>{loja.tempo_entrega}</span></>
+                  )}
+                  {loja.tempo_entrega && loja.tempo_retirada && <>&nbsp;·&nbsp;</>}
+                  {loja.tempo_retirada && (
+                    <>Retirada&nbsp;<span className="font-semibold" style={{ color: '#F5A623' }}>{loja.tempo_retirada}</span></>
+                  )}
+                </span>
+              </>
+            )}
+
+            {loja.formas_pagamento && (
+              <>
+                <span className="mx-3 text-gray-700">·</span>
+                <span className="flex items-center gap-1.5 text-gray-400">
+                  💳&nbsp;
+                  {Array.isArray(loja.formas_pagamento)
+                    ? loja.formas_pagamento.join(' · ')
+                    : loja.formas_pagamento}
+                </span>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Linha 3: nav de categorias com underline âmbar */}
         {categorias.length > 0 && (
-          <div className="flex gap-2 overflow-x-auto px-4 pb-3 scrollbar-none">
+          <div className="flex overflow-x-auto scrollbar-none max-w-2xl mx-auto"
+            style={{ borderBottom: '1px solid #222' }}>
             <button onClick={() => setCategoriaAtiva(null)}
-              className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+              className="flex-shrink-0 flex items-center gap-1 px-4 py-3 text-xs font-medium whitespace-nowrap transition-colors border-b-2"
               style={{
-                background: !categoriaAtiva ? '#F5A623' : '#1a1a1a',
-                color: !categoriaAtiva ? '#000' : '#888',
+                borderColor: !categoriaAtiva ? '#F5A623' : 'transparent',
+                color: !categoriaAtiva ? '#F5A623' : '#666',
+                marginBottom: -1,
               }}>
               Todos
             </button>
             {categorias.map(c => (
               <button key={c.id} onClick={() => setCategoriaAtiva(c.id)}
-                className="flex-shrink-0 px-3 py-1.5 rounded-full text-xs font-medium transition-colors"
+                className="flex-shrink-0 flex items-center gap-1 px-4 py-3 text-xs font-medium whitespace-nowrap transition-colors border-b-2"
                 style={{
-                  background: categoriaAtiva === c.id ? '#F5A623' : '#1a1a1a',
-                  color: categoriaAtiva === c.id ? '#000' : '#888',
+                  borderColor: categoriaAtiva === c.id ? '#F5A623' : 'transparent',
+                  color: categoriaAtiva === c.id ? '#F5A623' : '#666',
+                  marginBottom: -1,
                 }}>
+                {c.emoji && <span>{c.emoji}</span>}
                 {c.nome}
               </button>
             ))}
