@@ -66,10 +66,12 @@ export function registerConfigHandlers() {
     })
     tx()
 
-    // Sync com Supabase em background
+    // Sync com Supabase
     const licenca = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
+    console.log('[config:save-loja] licenca.supabase_loja_id =', licenca?.supabase_loja_id)
+
     if (licenca?.supabase_loja_id) {
-      supabase.from('lojas').update({
+      const payload = {
         nome: data.nome,
         telefone: data.telefone,
         endereco: data.endereco,
@@ -81,7 +83,22 @@ export function registerConfigHandlers() {
         tempo_entrega: data.tempo_entrega,
         tempo_retirada: data.tempo_retirada,
         formas_pagamento: data.formas_pagamento,
-      }).eq('id', licenca.supabase_loja_id).then(() => {})
+      }
+      console.log('[config:save-loja] payload Supabase →', JSON.stringify(payload, null, 2))
+
+      const { data: updated, error } = await supabase
+        .from('lojas')
+        .update(payload)
+        .eq('id', licenca.supabase_loja_id)
+        .select('id, tempo_entrega, tempo_retirada, formas_pagamento, logo_url')
+
+      if (error) {
+        console.error('[config:save-loja] Supabase UPDATE error:', error.message, error.details)
+      } else {
+        console.log('[config:save-loja] Supabase UPDATE ok:', JSON.stringify(updated))
+      }
+    } else {
+      console.warn('[config:save-loja] supabase_loja_id ausente — UPDATE ignorado')
     }
 
     return true
