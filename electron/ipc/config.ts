@@ -71,26 +71,44 @@ export function registerConfigHandlers() {
     console.log('[config:save-loja] data recebido:', JSON.stringify(data))
     console.log('[config:save-loja] licenca.supabase_loja_id:', licenca?.supabase_loja_id ?? 'NULL')
 
-    // Mescla configurações salvas com dados recebidos para ter campos completos
+    // Lê configurações salvas do SQLite (campos fixos da loja)
     const configs = db.prepare("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'loja_%'").all() as any[]
     const saved = Object.fromEntries(configs.map(r => [r.chave.replace('loja_', ''), r.valor]))
-    const merged = { ...saved, ...Object.fromEntries(lojaFields.filter(f => data[f] !== undefined).map(f => [f, data[f]])) }
 
     const nfc = (v: any) => typeof v === 'string' ? v.normalize('NFC') : v
 
+    // Campos fixos: vêm de Configurações → Dados da Loja (saved do SQLite)
+    // Campos dinâmicos: vêm direto de data (enviados pelo Cardápio Online)
+    const tempoEntrega = (data.tempo_entrega as string) || saved.tempo_entrega || null
+    const tempoRetirada = (data.tempo_retirada as string) || saved.tempo_retirada || null
+    const formasPagamento = (data.formas_pagamento as string) || saved.formas_pagamento || null
+    const logoUrl = (data.logo_url as string) || saved.logo_url || null
+    const taxaEntrega = data.taxa_entrega !== undefined ? Number(data.taxa_entrega) : (saved.taxa_entrega ? Number(saved.taxa_entrega) : null)
+    const pedidoMinimo = data.pedido_minimo !== undefined ? Number(data.pedido_minimo) : (saved.pedido_minimo ? Number(saved.pedido_minimo) : null)
+    const cardapioAtivo = data.cardapio_ativo !== undefined
+      ? (data.cardapio_ativo === 'true' || data.cardapio_ativo === true)
+      : (saved.cardapio_ativo === 'true')
+
+    console.log('[config:save-loja] campos extraídos de data:', {
+      tempo_entrega: data.tempo_entrega,
+      tempo_retirada: data.tempo_retirada,
+      formas_pagamento: data.formas_pagamento,
+      logo_url: data.logo_url,
+    })
+
     const payload = {
-      nome: nfc(merged.nome),
-      codigo: nfc(merged.codigo),
-      telefone: nfc(merged.telefone),
-      endereco: nfc(merged.endereco),
-      chave_pix: nfc(merged.chave_pix),
-      logo_url: merged.logo_url || null,
-      taxa_entrega: merged.taxa_entrega ? Number(merged.taxa_entrega) : null,
-      pedido_minimo: merged.pedido_minimo ? Number(merged.pedido_minimo) : null,
-      cardapio_ativo: merged.cardapio_ativo === 'true' || merged.cardapio_ativo === true,
-      tempo_entrega: merged.tempo_entrega || null,
-      tempo_retirada: merged.tempo_retirada || null,
-      formas_pagamento: merged.formas_pagamento || null,
+      nome: nfc(saved.nome),
+      codigo: nfc(saved.codigo),
+      telefone: nfc(saved.telefone),
+      endereco: nfc(saved.endereco),
+      chave_pix: nfc(saved.chave_pix),
+      logo_url: logoUrl,
+      taxa_entrega: taxaEntrega,
+      pedido_minimo: pedidoMinimo,
+      cardapio_ativo: cardapioAtivo,
+      tempo_entrega: tempoEntrega,
+      tempo_retirada: tempoRetirada,
+      formas_pagamento: formasPagamento,
     }
 
     console.log('[config:save-loja] payload Supabase:', JSON.stringify(payload))
