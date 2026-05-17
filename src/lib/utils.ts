@@ -13,11 +13,14 @@ export function formatDate(date: string | Date): string {
   return new Intl.DateTimeFormat('pt-BR').format(new Date(date))
 }
 
-export function formatDateTime(date: string | Date): string {
+export function formatDateTime(date: string | Date | null | undefined): string {
+  if (!date) return '—'
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return '—'
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit', month: '2-digit', year: 'numeric',
     hour: '2-digit', minute: '2-digit'
-  }).format(new Date(date))
+  }).format(d)
 }
 
 export function formatCpfCnpj(v: string): string {
@@ -44,7 +47,8 @@ export function statusLabel(status: string): string {
   return labels[status] || status
 }
 
-export function whatsappUrl(telefone: string, mensagem: string): string {
+export function whatsappUrl(telefone: string | null | undefined, mensagem: string): string {
+  if (!telefone) return '#'
   const num = telefone.replace(/\D/g, '')
   const numBr = num.startsWith('55') ? num : `55${num}`
   return `https://wa.me/${numBr}?text=${encodeURIComponent(mensagem)}`

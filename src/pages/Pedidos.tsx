@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { MessageCircle, X, RefreshCw, Clock, CheckCircle, Truck, XCircle, ShoppingBag, Wifi } from 'lucide-react'
+import { MessageCircle, X, RefreshCw, Clock, CheckCircle, Truck, XCircle, ShoppingBag, Wifi, MapPin, CreditCard, FileText, ExternalLink } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency, formatDateTime, statusLabel, whatsappUrl, gerarLinkRastreio } from '../lib/utils'
 
@@ -51,11 +51,20 @@ export default function Pedidos() {
   const [motoboyModal, setMotoboyModal] = useState<Pedido | null>(null)
   const [selectedMotoboy, setSelectedMotoboy] = useState<number | null>(null)
   const [actionLoading, setActionLoading] = useState<number | null>(null)
+  const [detalhe, setDetalhe] = useState<any | null>(null)
+  const [loadingDetalhe, setLoadingDetalhe] = useState(false)
 
   const load = useCallback(async () => {
     if (!window.api) { setPedidos(MOCK_PEDIDOS); setMotoboys(MOCK_MOTOBOYS); setLoading(false); return }
     try {
-      const [p, m] = await Promise.all([window.api.pedidos.list(), window.api.motoboys.list()])
+      const [rawPedidos, m] = await Promise.all([window.api.pedidos.list(), window.api.motoboys.list()])
+      const p = rawPedidos.map((r: any) => ({
+        ...r,
+        itens: (() => {
+          const arr = typeof r.itens === 'string' ? JSON.parse(r.itens) : (r.itens ?? [])
+          return Array.isArray(arr) ? arr.filter((i: any) => i.nome != null) : []
+        })(),
+      }))
       setPedidos(p)
       setMotoboys(m)
     } catch { toast.error('Erro ao carregar pedidos') }
@@ -76,7 +85,7 @@ export default function Pedidos() {
         toast.success(`Pedido ${novoStatus === 'entregue' ? 'entregue' : 'atualizado'}`)
         return
       }
-      await window.api.pedidos.updateStatus(pedido.id, { status: novoStatus, ...extra })
+      await window.api.pedidos.updateStatus(pedido.id, novoStatus, extra)
       toast.success('Status atualizado')
       load()
     } catch { toast.error('Erro ao atualizar status') }
@@ -96,6 +105,18 @@ export default function Pedidos() {
     await updateStatus(motoboyModal!, 'a_caminho', { motoboy_id: selectedMotoboy, motoboy_nome: mb?.nome })
     setMotoboyModal(null)
     setSelectedMotoboy(null)
+  }
+
+  async function abrirDetalhe(p: Pedido) {
+    setDetalhe(p)
+    setLoadingDetalhe(true)
+    try {
+      if (window.api) {
+        const full = await window.api.pedidos.get(p.id)
+        if (full) setDetalhe(full)
+      }
+    } catch { /* mantém dados da lista */ }
+    finally { setLoadingDetalhe(false) }
   }
 
   function openWhatsApp(p: Pedido) {
@@ -154,11 +175,14 @@ export default function Pedidos() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map(p => {
-              const cfg = STATUS_CONFIG[p.status]
+              const cfg = STATUS_CONFIG[p.status] ?? STATUS_CONFIG['novo']
               const Icon = cfg.icon
               const isLoading = actionLoading === p.id
+              const itens = Array.isArray(p.itens) ? p.itens : []
               return (
-                <div key={p.id} className="rounded-xl overflow-hidden" style={{ background: 'var(--card)', border: `1px solid var(--border)` }}>
+                <div key={p.id} className="rounded-xl overflow-hidden cursor-pointer hover:ring-1 hover:ring-white/10 transition-all"
+                  style={{ background: 'var(--card)', border: `1px solid var(--border)` }}
+                  onClick={() => abrirDetalhe(p)}>
                   {/* Card header */}
                   <div className="flex items-center justify-between px-4 py-3" style={{ borderBottom: '1px solid var(--border)' }}>
                     <div className="flex items-center gap-2">
@@ -171,7 +195,7 @@ export default function Pedidos() {
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: p.origem === 'online' ? '#3B82F622' : '#6B728022', color: p.origem === 'online' ? '#3B82F6' : '#6B7280' }}>
                         {p.origem === 'online' ? 'Online' : 'Balcão'}
                       </span>
-                      <button onClick={() => openWhatsApp(p)} className="p-1 rounded" style={{ color: '#22C55E' }}><MessageCircle className="w-4 h-4" /></button>
+                      <button onClick={e => { e.stopPropagation(); openWhatsApp(p) }} className="p-1 rounded" style={{ color: '#22C55E' }}><MessageCircle className="w-4 h-4" /></button>
                     </div>
                   </div>
 
@@ -180,10 +204,10 @@ export default function Pedidos() {
                     <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{p.cliente_nome}</p>
                     <p className="text-xs mt-0.5 mb-2" style={{ color: 'var(--text-secondary)' }}>{formatDateTime(p.created_at)}</p>
                     <div className="space-y-1 mb-3">
-                      {p.itens.slice(0, 2).map((it, i) => (
+                      {itens.slice(0, 2).map((it: any, i: number) => (
                         <p key={i} className="text-xs" style={{ color: 'var(--text-secondary)' }}>{it.quantidade}x {it.nome}</p>
                       ))}
-                      {p.itens.length > 2 && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>+{p.itens.length - 2} item(ns)</p>}
+                      {itens.length > 2 && <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>+{itens.length - 2} item(ns)</p>}
                     </div>
                     {p.motoboy_nome && (
                       <p className="text-xs mb-2" style={{ color: '#3B82F6' }}>Motoboy: {p.motoboy_nome}</p>
@@ -195,7 +219,7 @@ export default function Pedidos() {
 
                   {/* Actions */}
                   {p.status !== 'entregue' && p.status !== 'cancelado' && (
-                    <div className="px-4 pb-3 flex flex-wrap gap-2">
+                    <div className="px-4 pb-3 flex flex-wrap gap-2" onClick={e => e.stopPropagation()}>
                       {p.status === 'novo' && (
                         <button onClick={() => updateStatus(p, 'separando')} disabled={isLoading}
                           className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#A855F7' }}>
@@ -226,6 +250,142 @@ export default function Pedidos() {
           </div>
         )}
       </div>
+
+      {/* Painel de Detalhe */}
+      {detalhe && (
+        <div className="fixed inset-0 z-50 flex justify-end" style={{ background: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setDetalhe(null)}>
+          <div className="w-full max-w-md h-full flex flex-col shadow-2xl overflow-hidden"
+            style={{ background: 'var(--card)' }}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 py-4 flex-shrink-0"
+              style={{ borderBottom: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-2">
+                <span className="font-bold text-base" style={{ color: 'var(--text-primary)' }}>
+                  Pedido {detalhe.numero}
+                </span>
+                {(() => {
+                  const cfg = STATUS_CONFIG[detalhe.status] ?? STATUS_CONFIG['novo']
+                  const Icon = cfg.icon
+                  return (
+                    <span className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1"
+                      style={{ background: cfg.bg, color: cfg.color }}>
+                      <Icon className="w-3 h-3" /> {statusLabel(detalhe.status ?? 'novo')}
+                    </span>
+                  )
+                })()}
+              </div>
+              <button onClick={() => setDetalhe(null)}>
+                <X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} />
+              </button>
+            </div>
+
+            {/* Corpo */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-5">
+              {loadingDetalhe && (
+                <p className="text-xs text-center" style={{ color: 'var(--text-secondary)' }}>Carregando detalhes...</p>
+              )}
+
+              {/* Cliente */}
+              <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-secondary)' }}>Cliente</p>
+                <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>{detalhe.cliente_nome || '—'}</p>
+                {detalhe.cliente_telefone && (
+                  <button onClick={() => openWhatsApp(detalhe)}
+                    className="flex items-center gap-1.5 text-xs" style={{ color: '#22C55E' }}>
+                    <MessageCircle className="w-3.5 h-3.5" /> {detalhe.cliente_telefone}
+                  </button>
+                )}
+                {detalhe.cliente_endereco && (
+                  <p className="flex items-start gap-1.5 text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    <MapPin className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" /> {detalhe.cliente_endereco}
+                  </p>
+                )}
+                <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                  {formatDateTime(detalhe.created_at)}
+                  {detalhe.origem && <span className="ml-2 opacity-60">• {detalhe.origem === 'online' ? 'Online' : 'Balcão'}</span>}
+                </p>
+              </div>
+
+              {/* Itens */}
+              <div className="rounded-xl p-4" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-3" style={{ color: 'var(--text-secondary)' }}>Itens</p>
+                <div className="space-y-2">
+                  {(Array.isArray(detalhe.itens) ? detalhe.itens : []).map((it: any, i: number) => (
+                    <div key={i} className="flex items-center justify-between text-sm">
+                      <span style={{ color: 'var(--text-primary)' }}>{it.quantidade}x {it.nome}</span>
+                      <span style={{ color: 'var(--text-secondary)' }}>
+                        {it.preco_unitario != null ? formatCurrency(it.preco_unitario * it.quantidade) : '—'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Totais */}
+              <div className="rounded-xl p-4 space-y-2" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: 'var(--text-secondary)' }}>Pagamento</p>
+                {(detalhe.subtotal ?? 0) !== (detalhe.total ?? 0) && (
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: 'var(--text-secondary)' }}>Subtotal</span>
+                    <span>{formatCurrency(detalhe.subtotal ?? 0)}</span>
+                  </div>
+                )}
+                {(detalhe.desconto ?? 0) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: 'var(--text-secondary)' }}>Desconto</span>
+                    <span style={{ color: '#22C55E' }}>- {formatCurrency(detalhe.desconto)}</span>
+                  </div>
+                )}
+                {(detalhe.taxa_entrega ?? 0) > 0 && (
+                  <div className="flex justify-between text-sm">
+                    <span style={{ color: 'var(--text-secondary)' }}>Taxa de entrega</span>
+                    <span>{formatCurrency(detalhe.taxa_entrega)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-bold text-base pt-2"
+                  style={{ borderTop: '1px solid var(--border)' }}>
+                  <span>Total</span>
+                  <span style={{ color: '#F5A623' }}>{formatCurrency(detalhe.total ?? 0)}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-xs pt-1" style={{ color: 'var(--text-secondary)' }}>
+                  <CreditCard className="w-3.5 h-3.5" />
+                  {detalhe.forma_pagamento || '—'}
+                  {detalhe.forma_pagamento2 && ` + ${detalhe.forma_pagamento2}`}
+                  {(detalhe.troco ?? 0) > 0 && ` • Troco: ${formatCurrency(detalhe.troco)}`}
+                </div>
+              </div>
+
+              {/* Observação */}
+              {detalhe.observacao && (
+                <div className="rounded-xl p-4" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <p className="text-xs font-semibold uppercase tracking-wide mb-1" style={{ color: 'var(--text-secondary)' }}>Observação</p>
+                  <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{detalhe.observacao}</p>
+                </div>
+              )}
+
+              {/* Rastreio */}
+              {detalhe.token_rastreio && (
+                <button onClick={() => window.api?.system.openExternal(gerarLinkRastreio(detalhe.token_rastreio))}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
+                  style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                  <ExternalLink className="w-4 h-4" /> Ver rastreio do cliente
+                </button>
+              )}
+
+              {/* Cancelamento */}
+              {detalhe.status === 'cancelado' && detalhe.motivo_cancelamento && (
+                <div className="rounded-xl p-4" style={{ background: '#EF444410', border: '1px solid #EF444430' }}>
+                  <p className="text-xs font-semibold mb-1" style={{ color: '#EF4444' }}>Motivo do cancelamento</p>
+                  <p className="text-sm" style={{ color: 'var(--text-primary)' }}>{detalhe.motivo_cancelamento}</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Cancel Modal */}
       {cancelModal && (

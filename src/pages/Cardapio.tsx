@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Globe, Power, RefreshCw, ExternalLink, Package, Clock, DollarSign, Truck, ShoppingBag, AlertCircle } from 'lucide-react'
+import { Globe, Power, RefreshCw, ExternalLink, Package, Clock, Truck, ShoppingBag, AlertCircle, Camera, Upload, ImageIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../lib/utils'
 
@@ -14,14 +14,16 @@ export default function Cardapio() {
     horario_abertura: '08:00', horario_fechamento: '22:00',
   })
   const [pedidosOnline, setPedidosOnline] = useState<any[]>([])
-  const [aba, setAba] = useState<'config' | 'produtos' | 'pedidos'>('config')
+  const [aba, setAba] = useState<'config' | 'produtos' | 'pedidos' | 'fotos'>('config')
+  const [fotosProdutos, setFotosProdutos] = useState<any[]>([])
+  const [loadingFotos, setLoadingFotos] = useState(false)
+  const [uploadingFotos, setUploadingFotos] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadConfig()
     loadProdutos()
     loadPedidosOnline()
 
-    // Listener de pedido online novo (notificação realtime do main process)
     if (window.api) {
       window.api.cardapio.onPedidoNovo(() => {
         loadPedidosOnline()
@@ -29,6 +31,10 @@ export default function Cardapio() {
       })
     }
   }, [])
+
+  useEffect(() => {
+    if (aba === 'fotos') loadFotos()
+  }, [aba])
 
   async function loadConfig() {
     if (!window.api) {
@@ -58,6 +64,42 @@ export default function Cardapio() {
     if (!window.api) { setPedidosOnline([]); return }
     const result = await window.api.pedidos.getOnline()
     setPedidosOnline(result || [])
+  }
+
+  async function loadFotos() {
+    if (!window.api) return
+    setLoadingFotos(true)
+    const result = await window.api.cardapio.getFotos()
+    setFotosProdutos(result?.produtos || [])
+    setLoadingFotos(false)
+  }
+
+  async function uploadFoto(produto: any) {
+    if (!window.api) return
+    const dialog = await window.api.system.openDialog({
+      title: `Foto — ${produto.nome}`,
+      filters: [{ name: 'Imagens', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
+      properties: ['openFile'],
+    })
+    if (dialog.canceled || !dialog.filePaths?.[0]) return
+
+    const filePath = dialog.filePaths[0]
+    setUploadingFotos(prev => new Set(prev).add(produto.id))
+    try {
+      const result = await window.api.cardapio.uploadFoto(produto.id, filePath)
+      if (!result.ok) {
+        toast.error(result.erro || 'Erro ao fazer upload')
+        return
+      }
+      setFotosProdutos(prev =>
+        prev.map(p => p.id === produto.id ? { ...p, foto_url: result.url } : p)
+      )
+      toast.success('Foto atualizada!')
+    } catch {
+      toast.error('Erro ao fazer upload da foto')
+    } finally {
+      setUploadingFotos(prev => { const s = new Set(prev); s.delete(produto.id); return s })
+    }
   }
 
   async function toggleAtivo() {
@@ -103,12 +145,16 @@ export default function Cardapio() {
 
   async function aceitarPedido(pedidoOnlineId: string) {
     if (!window.api) { toast.success('Pedido aceito (mock)'); return }
-    const result = await window.api.pedidos.aceitarOnline(pedidoOnlineId)
-    if (result.ok) {
-      toast.success(`Pedido #${result.numero} criado!`)
-      loadPedidosOnline()
-    } else {
-      toast.error(result.erro || 'Erro ao aceitar pedido')
+    try {
+      const result = await window.api.pedidos.aceitarOnline(pedidoOnlineId)
+      if (result?.ok) {
+        toast.success(`Pedido #${result.numero} criado!`)
+        loadPedidosOnline()
+      } else {
+        toast.error(result?.erro || 'Erro ao aceitar pedido')
+      }
+    } catch (e: any) {
+      toast.error('Falha ao aceitar pedido. Veja o console do Electron.')
     }
   }
 
@@ -173,6 +219,7 @@ export default function Cardapio() {
           {[
             { id: 'config', label: 'Configurações' },
             { id: 'produtos', label: `Produtos (${selecionados.size} selecionados)` },
+            { id: 'fotos', label: 'Fotos do Cardápio' },
             { id: 'pedidos', label: `Pedidos Online${pedidosOnline.length > 0 ? ` (${pedidosOnline.length})` : ''}` },
           ].map(t => (
             <button key={t.id} onClick={() => setAba(t.id as any)}
@@ -313,6 +360,88 @@ export default function Cardapio() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Fotos do Cardápio */}
+        {aba === 'fotos' && (
+          <div>
+            <div className="flex items-center justify-between mb-5">
+              <div>
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Adicione fotos aos produtos sincronizados no cardápio online
+                </p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
+                  Sincronize os produtos na aba Produtos antes de adicionar fotos
+                </p>
+              </div>
+              <button onClick={loadFotos} disabled={loadingFotos}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-colors hover:bg-white/5"
+                style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                <RefreshCw size={13} className={loadingFotos ? 'spinner' : ''} />
+                Atualizar
+              </button>
+            </div>
+
+            {loadingFotos ? (
+              <div className="py-16 text-center" style={{ color: 'var(--text-secondary)' }}>
+                <RefreshCw size={28} className="mx-auto mb-3 opacity-30 spinner" />
+                <p className="text-sm">Carregando produtos...</p>
+              </div>
+            ) : fotosProdutos.length === 0 ? (
+              <div className="py-16 text-center" style={{ color: 'var(--text-secondary)' }}>
+                <Camera size={44} className="mx-auto mb-4 opacity-20" />
+                <p className="text-sm font-medium">Nenhum produto sincronizado</p>
+                <p className="text-xs mt-1">Vá para a aba Produtos, selecione e sincronize</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+                {fotosProdutos.map(p => {
+                  const uploading = uploadingFotos.has(p.id)
+                  return (
+                    <div key={p.id} className="rounded-xl overflow-hidden"
+                      style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+                      {/* Área da foto */}
+                      <div className="relative" style={{ aspectRatio: '4/3', background: 'var(--bg)' }}>
+                        {p.foto_url ? (
+                          <img src={p.foto_url} alt={p.nome}
+                            className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center gap-2"
+                            style={{ color: 'var(--text-secondary)' }}>
+                            <ImageIcon size={32} className="opacity-20" />
+                            <span className="text-xs opacity-40">Sem foto</span>
+                          </div>
+                        )}
+                        {uploading && (
+                          <div className="absolute inset-0 flex items-center justify-center"
+                            style={{ background: 'rgba(0,0,0,0.6)' }}>
+                            <RefreshCw size={22} className="spinner" style={{ color: '#F5A623' }} />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Nome e botão */}
+                      <div className="p-3">
+                        <p className="text-sm font-medium truncate mb-2">{p.nome}</p>
+                        <button
+                          onClick={() => uploadFoto(p)}
+                          disabled={uploading}
+                          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                          style={{
+                            background: p.foto_url ? 'var(--bg)' : '#F5A62320',
+                            border: `1px solid ${p.foto_url ? 'var(--border)' : '#F5A62340'}`,
+                            color: p.foto_url ? 'var(--text-secondary)' : '#F5A623',
+                          }}>
+                          <Upload size={12} />
+                          {p.foto_url ? 'Trocar foto' : 'Adicionar foto'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         )}
 

@@ -61,7 +61,7 @@ export function registerPedidoHandlers() {
     const db = getDb()
     let sql = `
       SELECT p.*, c.nome as cliente_nome_cadastro, m.nome as motoboy_nome,
-        GROUP_CONCAT(ip.nome || ' x' || ip.quantidade, ' | ') as itens_resumo
+        json_group_array(json_object('nome', ip.nome, 'quantidade', ip.quantidade, 'preco_unitario', ip.preco_unitario)) as itens
       FROM pedidos p
       LEFT JOIN clientes c ON c.id = p.cliente_id
       LEFT JOIN motoboys m ON m.id = p.motoboy_id
@@ -234,100 +234,178 @@ export function registerPedidoHandlers() {
 
   ipcMain.handle('pedidos:aceitar-online', async (_, pedidoOnlineId: string) => {
     const db = getDb()
+    console.log('[aceitar-online] iniciando, id:', pedidoOnlineId)
 
-    // 1. Busca o pedido no Supabase
-    const { data: online } = await supabase
-      .from('pedidos_online')
-      .select('*')
-      .eq('id', pedidoOnlineId)
-      .single()
+    try {
+      // 1. Busca o pedido no Supabase
+      const { data: online, error: fetchErr } = await supabase
+        .from('pedidos_online')
+        .select('*')
+        .eq('id', pedidoOnlineId)
+        .single()
 
-    if (!online) return { ok: false, erro: 'Pedido não encontrado' }
-
-    // 2. Resolve produto_local_id: items do cardápio têm produto_id (UUID de cardapio_produtos)
-    //    Precisamos do ID local SQLite para baixar estoque corretamente
-    const onlineItens = online.itens as any[]
-    const prodUuids = [...new Set(onlineItens.map((i: any) => i.produto_id).filter(Boolean))]
-
-    const localIdMap: Record<string, number> = {}
-    if (prodUuids.length > 0) {
-      const { data: mapa } = await supabase
-        .from('cardapio_produtos')
-        .select('id, produto_local_id')
-        .in('id', prodUuids)
-      for (const row of mapa || []) {
-        if (row.produto_local_id) localIdMap[row.id] = row.produto_local_id
+      if (fetchErr) {
+        console.error('[aceitar-online] erro ao buscar pedido_online:', fetchErr.message)
+        return { ok: false, erro: `Erro ao buscar pedido: ${fetchErr.message}` }
       }
-    }
+      if (!online) return { ok: false, erro: 'Pedido não encontrado no Supabase' }
 
-    const itens = onlineItens.map((i: any) => ({
-      produto_id: localIdMap[i.produto_id] || i.produto_local_id || null,
-      produto_unidade_id: null as number | null,
-      nome: i.nome,
-      tipo: i.tipo || 'unidade',
-      quantidade: i.quantidade,
-      preco_unitario: i.preco_unitario,
-      total: i.total,
-    }))
+      console.log('[aceitar-online] pedido online carregado:', {
+        cliente: online.cliente_nome,
+        total: online.total,
+        itens: Array.isArray(online.itens) ? online.itens.length : typeof online.itens,
+        token: online.token_rastreio,
+      })
 
-    const numero = gerarNumero()
-    const token = online.token_rastreio
+      // 2. Garante que itens é um array
+      const onlineItens: any[] = Array.isArray(online.itens) ? online.itens : []
 
-    // 3. Transação: pedido + itens + estoque + caixa
-    const tx = db.transaction(() => {
-      const result = db.prepare(`
-        INSERT INTO pedidos (numero, cliente_nome, cliente_telefone, cliente_endereco, origem, status,
-          forma_pagamento, subtotal, desconto, taxa_entrega, total, troco, observacao, token_rastreio, pedido_online_id)
-        VALUES (?, ?, ?, ?, 'online', 'novo', ?, ?, 0, ?, ?, ?, ?, ?, ?)
-      `).run(
-        numero, online.cliente_nome, online.cliente_telefone, online.cliente_endereco,
-        online.forma_pagamento, online.subtotal, online.taxa_entrega, online.total,
-        online.troco_para ? online.troco_para - online.total : 0,
-        online.observacao, token, pedidoOnlineId,
-      )
+      // 3. Resolve produto_local_id: items do cardápio têm produto_id (UUID de cardapio_produtos)
+      const prodUuids = [...new Set(onlineItens.map((i: any) => i.produto_id).filter(Boolean))]
+      const localIdMap: Record<string, number> = {}
 
-      const pedidoId = result.lastInsertRowid as number
-
-      for (const item of itens) {
-        db.prepare(`
-          INSERT INTO itens_pedido (pedido_id, produto_id, produto_unidade_id, nome, tipo, quantidade, preco_unitario, desconto, total)
-          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
-        `).run(pedidoId, item.produto_id, item.produto_unidade_id,
-          item.nome, item.tipo, item.quantidade, item.preco_unitario, item.total)
-
-        if (item.produto_id) {
-          const { s } = db.prepare(`
-            SELECT COALESCE(SUM(CASE WHEN tipo='entrada' THEN quantidade ELSE -quantidade END), 0) as s
-            FROM estoque_movimentacoes WHERE produto_id = ?
-          `).get(item.produto_id) as any
-
-          db.prepare(`
-            INSERT INTO estoque_movimentacoes
-              (produto_id, produto_unidade_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia_tipo, referencia_id)
-            VALUES (?, ?, 'saida', ?, ?, ?, 'Venda Online', 'pedido', ?)
-          `).run(item.produto_id, item.produto_unidade_id,
-            item.quantidade, s, s - item.quantidade, pedidoId)
+      if (prodUuids.length > 0) {
+        const { data: mapa, error: mapaErr } = await supabase
+          .from('cardapio_produtos')
+          .select('id, produto_local_id')
+          .in('id', prodUuids)
+        if (mapaErr) console.error('[aceitar-online] erro ao buscar mapa de produtos:', mapaErr.message)
+        for (const row of mapa || []) {
+          if (row.produto_local_id) localIdMap[row.id] = row.produto_local_id
         }
       }
 
-      const sessao = db.prepare("SELECT id FROM caixa_sessoes WHERE status = 'aberto' LIMIT 1").get() as any
-      if (sessao && online.forma_pagamento !== 'fiado') {
-        db.prepare(`
-          INSERT INTO caixa_movimentacoes (sessao_id, tipo, valor, descricao, forma_pagamento, referencia_pedido_id)
-          VALUES (?, 'entrada', ?, ?, ?, ?)
-        `).run(sessao.id, online.total, `Venda Online #${numero}`, online.forma_pagamento, pedidoId)
-      }
+      console.log('[aceitar-online] localIdMap:', localIdMap)
 
-      return pedidoId
-    })
+      const itens = onlineItens.map((i: any) => ({
+        produto_id: localIdMap[i.produto_id] || i.produto_local_id || null,
+        produto_unidade_id: null as number | null,
+        nome: i.nome,
+        tipo: i.tipo || 'unidade',
+        quantidade: i.quantidade,
+        preco_unitario: i.preco_unitario ?? i.preco ?? 0,
+        total: i.total,
+      }))
 
-    const pedidoId = tx()
+      const numero = gerarNumero()
+      const token = online.token_rastreio
+      const total = online.total ?? 0
+      const formaPagamento = online.forma_pagamento || 'pix'
 
-    // 4. Sync Supabase em background — não bloqueia
-    supabase.from('pedidos_online').update({ sincronizado: true }).eq('id', pedidoOnlineId).then(() => {})
-    syncPedidoSupabase(pedidoId).catch(() => {})
+      console.log('[aceitar-online] iniciando transação SQLite, numero:', numero)
 
-    return { ok: true, pedido_id: pedidoId, numero }
+      // 4. Transação: cliente + pedido + itens + estoque + caixa + fiado
+      const tx = db.transaction(() => {
+        // ── Resolve cliente_id ────────────────────────────────────────────
+        let clienteId: number | null = null
+        const telefone = online.cliente_telefone?.replace(/\D/g, '') || null
+        if (telefone) {
+          const existente = db.prepare(
+            "SELECT id FROM clientes WHERE replace(replace(replace(telefone,' ',''),'-',''),'(','') LIKE ?"
+          ).get(`%${telefone}%`) as any
+          if (existente) {
+            clienteId = existente.id
+          } else {
+            const novo = db.prepare(
+              'INSERT INTO clientes (nome, telefone, ativo) VALUES (?, ?, 1)'
+            ).run(online.cliente_nome || 'Cliente Online', online.cliente_telefone)
+            clienteId = novo.lastInsertRowid as number
+            console.log('[aceitar-online] cliente criado, id:', clienteId)
+          }
+        }
+
+        // ── INSERT pedido ─────────────────────────────────────────────────
+        const result = db.prepare(`
+          INSERT INTO pedidos (numero, cliente_id, cliente_nome, cliente_telefone, cliente_endereco,
+            origem, status, forma_pagamento, subtotal, desconto, taxa_entrega, total, valor_pago,
+            troco, observacao, token_rastreio, pedido_online_id)
+          VALUES (?, ?, ?, ?, ?, 'online', 'novo', ?, ?, 0, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          numero,
+          clienteId,
+          online.cliente_nome || null,
+          online.cliente_telefone || null,
+          online.cliente_endereco || null,
+          formaPagamento,
+          online.subtotal ?? total,
+          online.taxa_entrega ?? 0,
+          total,
+          total,
+          online.troco_para ? online.troco_para - total : 0,
+          online.observacao || null,
+          token || null,
+          pedidoOnlineId,
+        )
+
+        const pedidoId = result.lastInsertRowid as number
+        console.log('[aceitar-online] pedido inserido, id:', pedidoId)
+
+        // ── Itens + estoque ───────────────────────────────────────────────
+        for (const item of itens) {
+          db.prepare(`
+            INSERT INTO itens_pedido (pedido_id, produto_id, produto_unidade_id, nome, tipo, quantidade, preco_unitario, desconto, total)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+          `).run(
+            pedidoId, item.produto_id ?? null, item.produto_unidade_id ?? null,
+            item.nome, item.tipo, item.quantidade, item.preco_unitario, item.total,
+          )
+
+          if (item.produto_id) {
+            const saldoRow = db.prepare(`
+              SELECT COALESCE(SUM(CASE WHEN tipo='entrada' THEN quantidade ELSE -quantidade END), 0) as s
+              FROM estoque_movimentacoes WHERE produto_id = ?
+            `).get(item.produto_id) as any
+            const s = saldoRow?.s ?? 0
+
+            db.prepare(`
+              INSERT INTO estoque_movimentacoes
+                (produto_id, produto_unidade_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo, referencia_tipo, referencia_id)
+              VALUES (?, ?, 'saida', ?, ?, ?, 'Venda Online', 'pedido', ?)
+            `).run(
+              item.produto_id, item.produto_unidade_id ?? null,
+              item.quantidade, s, s - item.quantidade, pedidoId,
+            )
+          }
+        }
+
+        // ── Caixa ─────────────────────────────────────────────────────────
+        const sessao = db.prepare("SELECT id FROM caixa_sessoes WHERE status = 'aberto' LIMIT 1").get() as any
+        if (sessao && formaPagamento !== 'fiado') {
+          db.prepare(`
+            INSERT INTO caixa_movimentacoes (sessao_id, tipo, valor, descricao, forma_pagamento, referencia_pedido_id)
+            VALUES (?, 'entrada', ?, ?, ?, ?)
+          `).run(sessao.id, total, `Venda Online #${numero}`, formaPagamento, pedidoId)
+        }
+
+        // ── Fiado ─────────────────────────────────────────────────────────
+        if (formaPagamento === 'fiado' && clienteId) {
+          const cliente = db.prepare('SELECT saldo_fiado FROM clientes WHERE id = ?').get(clienteId) as any
+          const saldoAnt = cliente?.saldo_fiado ?? 0
+          const saldoPost = saldoAnt + total
+          db.prepare(`
+            INSERT INTO fiado_movimentacoes (cliente_id, tipo, valor, saldo_anterior, saldo_posterior, descricao, referencia_pedido_id)
+            VALUES (?, 'debito', ?, ?, ?, 'Venda Online fiado', ?)
+          `).run(clienteId, total, saldoAnt, saldoPost, pedidoId)
+          db.prepare('UPDATE clientes SET saldo_fiado = ? WHERE id = ?').run(saldoPost, clienteId)
+          console.log('[aceitar-online] fiado registrado, cliente_id:', clienteId, 'saldo:', saldoPost)
+        }
+
+        return pedidoId
+      })
+
+      const pedidoId = tx()
+      console.log('[aceitar-online] transação concluída, pedido_id:', pedidoId)
+
+      // 5. Sync Supabase em background
+      supabase.from('pedidos_online').update({ sincronizado: true }).eq('id', pedidoOnlineId).then(() => {})
+      syncPedidoSupabase(pedidoId).catch(e => console.error('[aceitar-online] syncPedidoSupabase erro:', e?.message))
+
+      return { ok: true, pedido_id: pedidoId, numero }
+    } catch (e: any) {
+      console.error('[aceitar-online] ERRO INESPERADO:', e?.message)
+      console.error('[aceitar-online] stack:', e?.stack)
+      return { ok: false, erro: e?.message || 'Erro desconhecido ao aceitar pedido' }
+    }
   })
 
   ipcMain.handle('pedidos:imprimir', (_, id: number) => {

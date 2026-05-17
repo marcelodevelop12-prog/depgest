@@ -1,5 +1,24 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Component, ReactNode } from 'react'
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom'
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  render() {
+    if (this.state.error) {
+      const err = this.state.error as Error
+      return (
+        <div style={{ padding: 32, fontFamily: 'monospace', background: '#1a1a1a', color: '#fff', minHeight: '100vh' }}>
+          <h2 style={{ color: '#EF4444', marginBottom: 16 }}>Erro de renderização</h2>
+          <pre style={{ background: '#2a2a2a', padding: 16, borderRadius: 8, whiteSpace: 'pre-wrap', color: '#fca5a5' }}>{err.message}</pre>
+          <pre style={{ background: '#2a2a2a', padding: 16, borderRadius: 8, whiteSpace: 'pre-wrap', color: '#9ca3af', marginTop: 8, fontSize: 11 }}>{err.stack}</pre>
+          <button onClick={() => this.setState({ error: null })} style={{ marginTop: 16, padding: '8px 16px', background: '#F5A623', border: 'none', borderRadius: 8, cursor: 'pointer', color: '#000', fontWeight: 'bold' }}>Tentar novamente</button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 import { Toaster } from 'react-hot-toast'
 import { useAppStore } from './store/app'
 import Ativacao from './pages/Ativacao'
@@ -96,6 +115,7 @@ export default function App() {
   return (
     <HashRouter>
       <Layout>
+        <ErrorBoundary>
         <Routes>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<Dashboard />} />
@@ -113,6 +133,7 @@ export default function App() {
           <Route path="/cardapio" element={<Cardapio />} />
           <Route path="/configuracoes" element={<Configuracoes />} />
         </Routes>
+        </ErrorBoundary>
       </Layout>
       <Toaster
         position="bottom-right"

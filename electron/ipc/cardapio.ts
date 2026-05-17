@@ -2,6 +2,8 @@ import { ipcMain } from 'electron'
 import { getDb } from '../database'
 import { createClient } from '@supabase/supabase-js'
 import ws from 'ws'
+import fs from 'fs'
+import path from 'path'
 
 const supabase = createClient(
   'https://vxrhlljvjqdbpfngpzro.supabase.co',
@@ -51,26 +53,32 @@ export function registerCardapioHandlers() {
     const catMap: Record<number, string> = {} // local_id → supabase UUID
 
     for (const cat of cats) {
-      const { data: ex } = await supabase
+      const { data: ex, error: exErr } = await supabase
         .from('cardapio_categorias')
         .select('id')
         .eq('loja_id', lojaId)
         .eq('categoria_local_id', cat.id)
         .maybeSingle()
 
+      if (exErr) console.error('[cardapio:sync] cat SELECT erro:', exErr.message)
+
       if (ex) {
-        await supabase.from('cardapio_categorias')
+        const { error: upErr } = await supabase.from('cardapio_categorias')
           .update({ nome: cat.nome, ordem: cat.ordem, ativa: true })
           .eq('id', ex.id)
+        if (upErr) console.error('[cardapio:sync] cat UPDATE erro:', upErr.message)
         catMap[cat.id] = ex.id
       } else {
-        const { data: ins } = await supabase.from('cardapio_categorias')
+        const { data: ins, error: insErr } = await supabase.from('cardapio_categorias')
           .insert({ loja_id: lojaId, categoria_local_id: cat.id, nome: cat.nome, ordem: cat.ordem, ativa: true })
           .select('id')
           .single()
+        if (insErr) console.error('[cardapio:sync] cat INSERT erro:', insErr.message, insErr.code)
         if (ins) catMap[cat.id] = ins.id
       }
     }
+
+    console.log('[cardapio:sync] catMap:', catMap)
 
     // ── PASSO 2: produtos ───────────────────────────────────────────────
     const prodMap: Record<number, string> = {} // local_id → supabase UUID
@@ -78,23 +86,26 @@ export function registerCardapioHandlers() {
     for (const p of produtos) {
       const categoriaId = p.cat_id ? (catMap[p.cat_id] || null) : null
 
-      const { data: ex } = await supabase
+      const { data: ex, error: exErr } = await supabase
         .from('cardapio_produtos')
         .select('id')
         .eq('loja_id', lojaId)
         .eq('produto_local_id', p.id)
         .maybeSingle()
 
+      if (exErr) console.error('[cardapio:sync] prod SELECT erro:', exErr.message)
+
       if (ex) {
-        await supabase.from('cardapio_produtos').update({
+        const { error: upErr } = await supabase.from('cardapio_produtos').update({
           nome: p.nome,
           descricao: p.descricao || null,
           categoria_id: categoriaId,
           ativo: p.ativo === 1,
         }).eq('id', ex.id)
+        if (upErr) console.error('[cardapio:sync] prod UPDATE erro:', upErr.message)
         prodMap[p.id] = ex.id
       } else {
-        const { data: ins } = await supabase.from('cardapio_produtos')
+        const { data: ins, error: insErr } = await supabase.from('cardapio_produtos')
           .insert({
             loja_id: lojaId,
             produto_local_id: p.id,
@@ -107,37 +118,102 @@ export function registerCardapioHandlers() {
           })
           .select('id')
           .single()
+        if (insErr) console.error('[cardapio:sync] prod INSERT erro:', insErr.message, insErr.code)
         if (ins) prodMap[p.id] = ins.id
       }
     }
 
+    console.log('[cardapio:sync] prodMap:', prodMap)
+
     // ── PASSO 3: unidades (preços) ──────────────────────────────────────
     for (const p of produtos) {
       const cardapioProdId = prodMap[p.id]
-      if (!cardapioProdId) continue
+      if (!cardapioProdId) {
+        console.warn('[cardapio:sync] sem UUID para produto local id:', p.id)
+        continue
+      }
 
       const unidades = db.prepare(`
         SELECT id, tipo, quantidade_base, preco_venda
         FROM produto_unidades WHERE produto_id = ? AND ativo = 1
       `).all(p.id) as any[]
 
-      // Recria unidades: mais simples que upsert por tipo
-      await supabase.from('cardapio_unidades').delete().eq('produto_id', cardapioProdId)
+      const { error: delErr } = await supabase.from('cardapio_unidades').delete().eq('produto_id', cardapioProdId)
+      if (delErr) console.error('[cardapio:sync] unidades DELETE erro:', delErr.message)
 
       if (unidades.length > 0) {
-        await supabase.from('cardapio_unidades').insert(
+        const { error: insErr } = await supabase.from('cardapio_unidades').insert(
           unidades.map(u => ({
             produto_id: cardapioProdId,
             unidade_local_id: u.id,
             tipo: u.tipo,
             quantidade_base: u.quantidade_base,
             preco: u.preco_venda,
+            ativo: true,
           }))
         )
+        if (insErr) console.error('[cardapio:sync] unidades INSERT erro:', insErr.message, insErr.code)
       }
     }
 
     return { ok: true, synced: produtos.length }
+  })
+
+  // ── FOTOS ──────────────────────────────────────────────────────────────────
+
+  ipcMain.handle('cardapio:get-fotos', async () => {
+    const db = getDb()
+    const licenca = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
+    if (!licenca?.supabase_loja_id) return { ok: false, erro: 'Loja não configurada na nuvem', produtos: [] }
+
+    const { data, error } = await supabase
+      .from('cardapio_produtos')
+      .select('id, nome, foto_url, produto_local_id')
+      .eq('loja_id', licenca.supabase_loja_id)
+      .order('nome')
+
+    if (error) return { ok: false, erro: error.message, produtos: [] }
+    return { ok: true, produtos: data || [] }
+  })
+
+  ipcMain.handle('cardapio:upload-foto', async (_, cardapioProdutoId: string, filePath: string) => {
+    const db = getDb()
+    const licenca = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
+    if (!licenca?.supabase_loja_id) return { ok: false, erro: 'Loja não configurada na nuvem' }
+
+    const ext = path.extname(filePath).toLowerCase().replace('.', '') || 'jpg'
+    const mimeTypes: Record<string, string> = {
+      jpg: 'image/jpeg', jpeg: 'image/jpeg',
+      png: 'image/png', webp: 'image/webp', gif: 'image/gif',
+    }
+    const contentType = mimeTypes[ext] || 'image/jpeg'
+    const storagePath = `${licenca.supabase_loja_id}/${cardapioProdutoId}.${ext}`
+
+    let fileBuffer: Buffer
+    try {
+      fileBuffer = fs.readFileSync(filePath)
+    } catch (e: any) {
+      return { ok: false, erro: `Erro ao ler arquivo: ${e.message}` }
+    }
+
+    const { error: uploadError } = await supabase.storage
+      .from('produtos-fotos')
+      .upload(storagePath, fileBuffer, { contentType, upsert: true })
+
+    if (uploadError) return { ok: false, erro: uploadError.message }
+
+    const { data: { publicUrl } } = supabase.storage
+      .from('produtos-fotos')
+      .getPublicUrl(storagePath)
+
+    const { error: updateError } = await supabase
+      .from('cardapio_produtos')
+      .update({ foto_url: publicUrl })
+      .eq('id', cardapioProdutoId)
+
+    if (updateError) return { ok: false, erro: updateError.message }
+
+    return { ok: true, url: publicUrl }
   })
 
   ipcMain.handle('cardapio:sync', async () => {

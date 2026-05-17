@@ -75,7 +75,8 @@ export default function Clientes() {
       return
     }
     try {
-      const movs = await window.api.clientes.getFiado(c.id)
+      const res = await window.api.clientes.getFiado(c.id)
+      const movs = Array.isArray(res) ? res : (res?.movimentacoes ?? [])
       setFiadoMovs(movs)
     } catch { toast.error('Erro ao carregar fiado') }
   }

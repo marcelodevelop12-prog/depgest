@@ -65,18 +65,49 @@ export function registerConfigHandlers() {
     })
     tx()
 
-    // Sync com Supabase em background
+    // Sync com Supabase
     const licenca = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
+    console.log('[config:save-loja] data recebido:', JSON.stringify(data))
+    console.log('[config:save-loja] licenca.supabase_loja_id:', licenca?.supabase_loja_id ?? 'NULL')
+
+    // Mescla configurações salvas com dados recebidos para ter campos completos
+    const configs = db.prepare("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'loja_%'").all() as any[]
+    const saved = Object.fromEntries(configs.map(r => [r.chave.replace('loja_', ''), r.valor]))
+    const merged = { ...saved, ...Object.fromEntries(lojaFields.filter(f => data[f] !== undefined).map(f => [f, data[f]])) }
+
+    const nfc = (v: any) => typeof v === 'string' ? v.normalize('NFC') : v
+
+    const payload = {
+      nome: nfc(merged.nome),
+      codigo: nfc(merged.codigo),
+      telefone: nfc(merged.telefone),
+      endereco: nfc(merged.endereco),
+      chave_pix: nfc(merged.chave_pix),
+      taxa_entrega: merged.taxa_entrega ? Number(merged.taxa_entrega) : null,
+      pedido_minimo: merged.pedido_minimo ? Number(merged.pedido_minimo) : null,
+      cardapio_ativo: merged.cardapio_ativo === 'true' || merged.cardapio_ativo === true,
+    }
+
+    console.log('[config:save-loja] payload Supabase:', JSON.stringify(payload))
+
     if (licenca?.supabase_loja_id) {
-      supabase.from('lojas').update({
-        nome: data.nome,
-        telefone: data.telefone,
-        endereco: data.endereco,
-        chave_pix: data.chave_pix,
-        taxa_entrega: data.taxa_entrega,
-        pedido_minimo: data.pedido_minimo,
-        cardapio_ativo: data.cardapio_ativo,
-      }).eq('id', licenca.supabase_loja_id).then(() => {})
+      console.log('[config:save-loja] → UPDATE existente')
+      const { error } = await supabase.from('lojas').update(payload).eq('id', licenca.supabase_loja_id)
+      if (error) console.error('[config:save-loja] UPDATE erro:', error.message)
+      else console.log('[config:save-loja] UPDATE ok')
+    } else {
+      console.log('[config:save-loja] → INSERT novo registro')
+      try {
+        const { data: inserted, error } = await supabase.from('lojas').insert(payload).select('id').single()
+        if (error) {
+          console.error('[config:save-loja] INSERT erro:', error.message, error.details, error.hint)
+        } else if (inserted?.id) {
+          console.log('[config:save-loja] INSERT ok, supabase_loja_id:', inserted.id)
+          db.prepare('UPDATE licenca SET supabase_loja_id = ?').run(inserted.id)
+        }
+      } catch (e: any) {
+        console.error('[config:save-loja] INSERT exception:', e?.message)
+      }
     }
 
     return true
