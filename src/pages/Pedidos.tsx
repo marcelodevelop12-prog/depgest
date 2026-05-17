@@ -38,6 +38,7 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: any }> = 
   entregue: { color: '#22C55E', bg: '#22C55E22', icon: CheckCircle },
   cancelado: { color: '#EF4444', bg: '#EF444422', icon: XCircle },
 }
+const STATUS_FALLBACK = { color: '#6B7280', bg: '#6B728022', icon: Clock }
 const ALL_STATUS = ['novo', 'separando', 'a_caminho', 'entregue', 'cancelado'] as const
 type StatusType = typeof ALL_STATUS[number]
 

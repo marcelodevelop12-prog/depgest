@@ -53,7 +53,8 @@ export function registerConfigHandlers() {
   ipcMain.handle('config:save-loja', async (_, data: Record<string, unknown>) => {
     const db = getDb()
     const lojaFields = ['nome', 'cnpj', 'telefone', 'endereco', 'chave_pix', 'logo_url', 'codigo',
-      'taxa_entrega', 'pedido_minimo', 'raio_entrega_km', 'cardapio_ativo', 'horario_funcionamento']
+      'taxa_entrega', 'pedido_minimo', 'raio_entrega_km', 'cardapio_ativo', 'horario_funcionamento',
+      'tempo_entrega', 'tempo_retirada', 'formas_pagamento']
 
     const tx = db.transaction(() => {
       for (const field of lojaFields) {
@@ -83,9 +84,13 @@ export function registerConfigHandlers() {
       telefone: nfc(merged.telefone),
       endereco: nfc(merged.endereco),
       chave_pix: nfc(merged.chave_pix),
+      logo_url: merged.logo_url || null,
       taxa_entrega: merged.taxa_entrega ? Number(merged.taxa_entrega) : null,
       pedido_minimo: merged.pedido_minimo ? Number(merged.pedido_minimo) : null,
       cardapio_ativo: merged.cardapio_ativo === 'true' || merged.cardapio_ativo === true,
+      tempo_entrega: merged.tempo_entrega || null,
+      tempo_retirada: merged.tempo_retirada || null,
+      formas_pagamento: merged.formas_pagamento || null,
     }
 
     console.log('[config:save-loja] payload Supabase:', JSON.stringify(payload))
@@ -111,6 +116,33 @@ export function registerConfigHandlers() {
     }
 
     return true
+  })
+
+  ipcMain.handle('config:upload-logo', async (_, filePath: string) => {
+    const db = getDb()
+    const licenca = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
+
+    const ext = path.extname(filePath).slice(1).toLowerCase() || 'jpg'
+    const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`
+    const storagePath = `logos/${licenca?.supabase_loja_id || 'loja'}/${Date.now()}.${ext}`
+
+    const fileBuffer = fs.readFileSync(filePath)
+
+    const { error } = await supabase.storage
+      .from('lojas')
+      .upload(storagePath, fileBuffer, { contentType: mimeType, upsert: true })
+
+    if (error) throw new Error(error.message)
+
+    const { data: { publicUrl } } = supabase.storage.from('lojas').getPublicUrl(storagePath)
+
+    db.prepare('INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)').run('loja_logo_url', publicUrl)
+
+    if (licenca?.supabase_loja_id) {
+      supabase.from('lojas').update({ logo_url: publicUrl }).eq('id', licenca.supabase_loja_id).then(() => {})
+    }
+
+    return publicUrl
   })
 
   ipcMain.handle('config:backup', async (_, destPath: string) => {

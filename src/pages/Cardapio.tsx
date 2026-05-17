@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Globe, Power, RefreshCw, ExternalLink, Package, Clock, Truck, ShoppingBag, AlertCircle, Camera, Upload, ImageIcon } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Globe, Power, RefreshCw, ExternalLink, Package, Clock, DollarSign, Truck, ShoppingBag, AlertCircle, Camera, Check, Upload, ImageIcon } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../lib/utils'
 
@@ -13,6 +13,12 @@ export default function Cardapio() {
     taxa_entrega: '0', pedido_minimo: '0', raio_entrega_km: '5',
     horario_abertura: '08:00', horario_fechamento: '22:00',
   })
+  const [lojaExtra, setLojaExtra] = useState({
+    logo_url: '', tempo_entrega: '', tempo_retirada: '',
+    formas_pagamento: [] as string[],
+  })
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
   const [pedidosOnline, setPedidosOnline] = useState<any[]>([])
   const [aba, setAba] = useState<'config' | 'produtos' | 'pedidos' | 'fotos'>('config')
   const [fotosProdutos, setFotosProdutos] = useState<any[]>([])
@@ -51,6 +57,14 @@ export default function Cardapio() {
       raio_entrega_km: cfg.loja_raio_entrega_km || '5',
       horario_abertura: '08:00',
       horario_fechamento: '22:00',
+    })
+    let formasParsed: string[] = []
+    try { formasParsed = JSON.parse(cfg.loja_formas_pagamento || '[]') } catch { formasParsed = [] }
+    setLojaExtra({
+      logo_url: cfg.loja_logo_url || '',
+      tempo_entrega: cfg.loja_tempo_entrega || '',
+      tempo_retirada: cfg.loja_tempo_retirada || '',
+      formas_pagamento: formasParsed,
     })
   }
 
@@ -114,17 +128,47 @@ export default function Cardapio() {
 
   async function salvarConfig() {
     if (!window.api) { toast.success('Configuração salva (mock)'); return }
+    const formasJson = JSON.stringify(lojaExtra.formas_pagamento)
     await window.api.config.save({
       loja_taxa_entrega: config.taxa_entrega,
       loja_pedido_minimo: config.pedido_minimo,
       loja_raio_entrega_km: config.raio_entrega_km,
+      loja_tempo_entrega: lojaExtra.tempo_entrega,
+      loja_tempo_retirada: lojaExtra.tempo_retirada,
+      loja_formas_pagamento: formasJson,
+      loja_logo_url: lojaExtra.logo_url,
     })
     await window.api.config.saveLoja({
       taxa_entrega: parseFloat(config.taxa_entrega),
       pedido_minimo: parseFloat(config.pedido_minimo),
       raio_entrega_km: parseFloat(config.raio_entrega_km),
+      tempo_entrega: lojaExtra.tempo_entrega,
+      tempo_retirada: lojaExtra.tempo_retirada,
+      formas_pagamento: formasJson,
+      logo_url: lojaExtra.logo_url,
     })
     toast.success('Configurações salvas!')
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !window.api) return
+    setUploadingLogo(true)
+    try {
+      const url = await window.api.config.uploadLogo((file as any).path)
+      setLojaExtra(d => ({ ...d, logo_url: url }))
+      toast.success('Logo enviado!')
+    } catch { toast.error('Erro ao enviar logo') }
+    finally { setUploadingLogo(false) }
+  }
+
+  function toggleFormaPagamento(forma: string) {
+    setLojaExtra(d => ({
+      ...d,
+      formas_pagamento: d.formas_pagamento.includes(forma)
+        ? d.formas_pagamento.filter(f => f !== forma)
+        : [...d.formas_pagamento, forma],
+    }))
   }
 
   async function sincronizar() {
@@ -286,6 +330,77 @@ export default function Cardapio() {
                     className="w-full px-3 py-2.5 rounded-xl text-sm"
                     style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
                 </div>
+              </div>
+            </div>
+
+            {/* Logo da loja */}
+            <div className="rounded-xl p-5 space-y-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+              <h3 className="font-semibold flex items-center gap-2"><Camera size={16} style={{ color: '#F5A623' }} /> Logo da Loja</h3>
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
+                  style={{ border: '2px solid #F5A623', background: 'var(--bg)' }}>
+                  {lojaExtra.logo_url
+                    ? <img src={lojaExtra.logo_url} className="w-full h-full object-cover" />
+                    : <Camera size={20} style={{ color: 'var(--text-secondary)' }} />
+                  }
+                </div>
+                <div className="flex-1 space-y-2">
+                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                  <button onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-colors"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'var(--bg)' }}>
+                    <Camera size={13} />
+                    {uploadingLogo ? 'Enviando...' : 'Escolher imagem'}
+                  </button>
+                  {lojaExtra.logo_url && (
+                    <p className="text-xs truncate font-mono" style={{ color: 'var(--text-secondary)' }}>{lojaExtra.logo_url}</p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Tempos de entrega / retirada */}
+            <div className="rounded-xl p-5 space-y-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+              <h3 className="font-semibold flex items-center gap-2"><Clock size={16} style={{ color: '#F5A623' }} /> Tempos</h3>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: 'var(--text-secondary)' }}>Tempo de entrega</label>
+                  <input value={lojaExtra.tempo_entrega}
+                    onChange={e => setLojaExtra(d => ({ ...d, tempo_entrega: e.target.value }))}
+                    placeholder="ex: 60-90 min"
+                    className="w-full px-3 py-2.5 rounded-xl text-sm"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                </div>
+                <div>
+                  <label className="block text-xs mb-1.5" style={{ color: 'var(--text-secondary)' }}>Tempo de retirada</label>
+                  <input value={lojaExtra.tempo_retirada}
+                    onChange={e => setLojaExtra(d => ({ ...d, tempo_retirada: e.target.value }))}
+                    placeholder="ex: 30-40 min"
+                    className="w-full px-3 py-2.5 rounded-xl text-sm"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+                </div>
+              </div>
+            </div>
+
+            {/* Formas de pagamento */}
+            <div className="rounded-xl p-5 space-y-3" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+              <h3 className="font-semibold flex items-center gap-2"><DollarSign size={16} style={{ color: '#F5A623' }} /> Formas de Pagamento Aceitas</h3>
+              <div className="flex gap-3">
+                {['PIX', 'Cartão', 'Dinheiro'].map(forma => {
+                  const ativa = lojaExtra.formas_pagamento.includes(forma)
+                  return (
+                    <button key={forma} onClick={() => toggleFormaPagamento(forma)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+                      style={{
+                        background: ativa ? '#F5A62318' : 'var(--bg)',
+                        border: `1px solid ${ativa ? '#F5A623' : 'var(--border)'}`,
+                        color: ativa ? '#F5A623' : 'var(--text-secondary)',
+                      }}>
+                      {ativa && <Check size={13} />}
+                      {forma}
+                    </button>
+                  )
+                })}
               </div>
             </div>
 

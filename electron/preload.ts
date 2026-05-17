@@ -37,6 +37,7 @@ const api = {
     save: (data: Record<string, unknown>) => ipcRenderer.invoke('config:save', data),
     saveLoja: (data: Record<string, unknown>) => ipcRenderer.invoke('config:save-loja', data),
     getLoja: () => ipcRenderer.invoke('config:get-loja'),
+    uploadLogo: (filePath: string) => ipcRenderer.invoke('config:upload-logo', filePath),
     backup: (destPath: string) => ipcRenderer.invoke('config:backup', destPath),
     restore: (srcPath: string) => ipcRenderer.invoke('config:restore', srcPath),
   },

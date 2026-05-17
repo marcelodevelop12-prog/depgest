@@ -55,7 +55,14 @@ export default function Configuracoes() {
     setSaving(true)
     try {
       if (window.api) {
-        await window.api.config.saveLoja(loja)
+        await window.api.config.saveLoja({
+          nome: loja.loja_nome,
+          cnpj: loja.loja_cnpj,
+          telefone: loja.loja_telefone,
+          endereco: loja.loja_endereco,
+          chave_pix: loja.loja_chave_pix,
+          codigo: loja.loja_codigo,
+        })
         await window.api.config.save(loja)
       }
       toast.success('Dados da loja salvos!')
