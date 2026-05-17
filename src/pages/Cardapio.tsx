@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Globe, Power, RefreshCw, ExternalLink, Package, Clock, DollarSign, Truck, ShoppingBag, AlertCircle, Camera, Check, Upload, ImageIcon } from 'lucide-react'
+import { Globe, Power, RefreshCw, ExternalLink, Package, Clock, DollarSign, Truck, ShoppingBag, AlertCircle, Camera, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../lib/utils'
 
@@ -20,16 +20,14 @@ export default function Cardapio() {
   const [uploadingLogo, setUploadingLogo] = useState(false)
   const logoInputRef = useRef<HTMLInputElement>(null)
   const [pedidosOnline, setPedidosOnline] = useState<any[]>([])
-  const [aba, setAba] = useState<'config' | 'produtos' | 'pedidos' | 'fotos'>('config')
-  const [fotosProdutos, setFotosProdutos] = useState<any[]>([])
-  const [loadingFotos, setLoadingFotos] = useState(false)
-  const [uploadingFotos, setUploadingFotos] = useState<Set<string>>(new Set())
+  const [aba, setAba] = useState<'config' | 'produtos' | 'pedidos'>('config')
 
   useEffect(() => {
     loadConfig()
     loadProdutos()
     loadPedidosOnline()
 
+    // Listener de pedido online novo (notificação realtime do main process)
     if (window.api) {
       window.api.cardapio.onPedidoNovo(() => {
         loadPedidosOnline()
@@ -37,10 +35,6 @@ export default function Cardapio() {
       })
     }
   }, [])
-
-  useEffect(() => {
-    if (aba === 'fotos') loadFotos()
-  }, [aba])
 
   async function loadConfig() {
     if (!window.api) {
@@ -80,42 +74,6 @@ export default function Cardapio() {
     setPedidosOnline(result || [])
   }
 
-  async function loadFotos() {
-    if (!window.api) return
-    setLoadingFotos(true)
-    const result = await window.api.cardapio.getFotos()
-    setFotosProdutos(result?.produtos || [])
-    setLoadingFotos(false)
-  }
-
-  async function uploadFoto(produto: any) {
-    if (!window.api) return
-    const dialog = await window.api.system.openDialog({
-      title: `Foto — ${produto.nome}`,
-      filters: [{ name: 'Imagens', extensions: ['jpg', 'jpeg', 'png', 'webp'] }],
-      properties: ['openFile'],
-    })
-    if (dialog.canceled || !dialog.filePaths?.[0]) return
-
-    const filePath = dialog.filePaths[0]
-    setUploadingFotos(prev => new Set(prev).add(produto.id))
-    try {
-      const result = await window.api.cardapio.uploadFoto(produto.id, filePath)
-      if (!result.ok) {
-        toast.error(result.erro || 'Erro ao fazer upload')
-        return
-      }
-      setFotosProdutos(prev =>
-        prev.map(p => p.id === produto.id ? { ...p, foto_url: result.url } : p)
-      )
-      toast.success('Foto atualizada!')
-    } catch {
-      toast.error('Erro ao fazer upload da foto')
-    } finally {
-      setUploadingFotos(prev => { const s = new Set(prev); s.delete(produto.id); return s })
-    }
-  }
-
   async function toggleAtivo() {
     const novoStatus = !ativo
     setAtivo(novoStatus)
@@ -129,8 +87,7 @@ export default function Cardapio() {
   async function salvarConfig() {
     if (!window.api) { toast.success('Configuração salva (mock)'); return }
     const formasJson = JSON.stringify(lojaExtra.formas_pagamento)
-
-    const localPayload = {
+    await window.api.config.save({
       loja_taxa_entrega: config.taxa_entrega,
       loja_pedido_minimo: config.pedido_minimo,
       loja_raio_entrega_km: config.raio_entrega_km,
@@ -138,11 +95,8 @@ export default function Cardapio() {
       loja_tempo_retirada: lojaExtra.tempo_retirada,
       loja_formas_pagamento: formasJson,
       loja_logo_url: lojaExtra.logo_url,
-    }
-    console.log('[salvarConfig] config.save payload:', JSON.stringify(localPayload))
-    await window.api.config.save(localPayload)
-
-    const supaPayload = {
+    })
+    await window.api.config.saveLoja({
       taxa_entrega: parseFloat(config.taxa_entrega),
       pedido_minimo: parseFloat(config.pedido_minimo),
       raio_entrega_km: parseFloat(config.raio_entrega_km),
@@ -150,11 +104,7 @@ export default function Cardapio() {
       tempo_retirada: lojaExtra.tempo_retirada,
       formas_pagamento: formasJson,
       logo_url: lojaExtra.logo_url,
-    }
-    console.log('[salvarConfig] config.saveLoja payload:', JSON.stringify(supaPayload))
-    const result = await window.api.config.saveLoja(supaPayload)
-    console.log('[salvarConfig] config.saveLoja result:', result)
-
+    })
     toast.success('Configurações salvas!')
   }
 
@@ -197,16 +147,12 @@ export default function Cardapio() {
 
   async function aceitarPedido(pedidoOnlineId: string) {
     if (!window.api) { toast.success('Pedido aceito (mock)'); return }
-    try {
-      const result = await window.api.pedidos.aceitarOnline(pedidoOnlineId)
-      if (result?.ok) {
-        toast.success(`Pedido #${result.numero} criado!`)
-        loadPedidosOnline()
-      } else {
-        toast.error(result?.erro || 'Erro ao aceitar pedido')
-      }
-    } catch (e: any) {
-      toast.error('Falha ao aceitar pedido. Veja o console do Electron.')
+    const result = await window.api.pedidos.aceitarOnline(pedidoOnlineId)
+    if (result.ok) {
+      toast.success(`Pedido #${result.numero} criado!`)
+      loadPedidosOnline()
+    } else {
+      toast.error(result.erro || 'Erro ao aceitar pedido')
     }
   }
 
@@ -271,7 +217,6 @@ export default function Cardapio() {
           {[
             { id: 'config', label: 'Configurações' },
             { id: 'produtos', label: `Produtos (${selecionados.size} selecionados)` },
-            { id: 'fotos', label: 'Fotos do Cardápio' },
             { id: 'pedidos', label: `Pedidos Online${pedidosOnline.length > 0 ? ` (${pedidosOnline.length})` : ''}` },
           ].map(t => (
             <button key={t.id} onClick={() => setAba(t.id as any)}
@@ -427,26 +372,12 @@ export default function Cardapio() {
               <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
                 Selecione quais produtos aparecem no cardápio online
               </p>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => {
-                    if (selecionados.size === produtos.length) {
-                      setSelecionados(new Set())
-                    } else {
-                      setSelecionados(new Set(produtos.map((p: any) => p.id)))
-                    }
-                  }}
-                  className="px-3 py-2 rounded-xl text-sm font-medium"
-                  style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
-                  {selecionados.size === produtos.length ? 'Desmarcar tudo' : 'Selecionar tudo'}
-                </button>
-                <button onClick={sincronizar} disabled={syncing || selecionados.size === 0}
-                  className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50"
-                  style={{ background: '#3B82F6', color: '#fff' }}>
-                  <RefreshCw size={14} className={syncing ? 'spinner' : ''} />
-                  Sincronizar ({selecionados.size})
-                </button>
-              </div>
+              <button onClick={sincronizar} disabled={syncing || selecionados.size === 0}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50"
+                style={{ background: '#3B82F6', color: '#fff' }}>
+                <RefreshCw size={14} className={syncing ? 'spinner' : ''} />
+                Sincronizar ({selecionados.size})
+              </button>
             </div>
 
             <div className="space-y-2">
@@ -497,88 +428,6 @@ export default function Cardapio() {
                 </div>
               )}
             </div>
-          </div>
-        )}
-
-        {/* Fotos do Cardápio */}
-        {aba === 'fotos' && (
-          <div>
-            <div className="flex items-center justify-between mb-5">
-              <div>
-                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                  Adicione fotos aos produtos sincronizados no cardápio online
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>
-                  Sincronize os produtos na aba Produtos antes de adicionar fotos
-                </p>
-              </div>
-              <button onClick={loadFotos} disabled={loadingFotos}
-                className="flex items-center gap-2 px-3 py-2 rounded-xl text-sm transition-colors hover:bg-white/5"
-                style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
-                <RefreshCw size={13} className={loadingFotos ? 'spinner' : ''} />
-                Atualizar
-              </button>
-            </div>
-
-            {loadingFotos ? (
-              <div className="py-16 text-center" style={{ color: 'var(--text-secondary)' }}>
-                <RefreshCw size={28} className="mx-auto mb-3 opacity-30 spinner" />
-                <p className="text-sm">Carregando produtos...</p>
-              </div>
-            ) : fotosProdutos.length === 0 ? (
-              <div className="py-16 text-center" style={{ color: 'var(--text-secondary)' }}>
-                <Camera size={44} className="mx-auto mb-4 opacity-20" />
-                <p className="text-sm font-medium">Nenhum produto sincronizado</p>
-                <p className="text-xs mt-1">Vá para a aba Produtos, selecione e sincronize</p>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-                {fotosProdutos.map(p => {
-                  const uploading = uploadingFotos.has(p.id)
-                  return (
-                    <div key={p.id} className="rounded-xl overflow-hidden"
-                      style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-                      {/* Área da foto */}
-                      <div className="relative" style={{ aspectRatio: '4/3', background: 'var(--bg)' }}>
-                        {p.foto_url ? (
-                          <img src={p.foto_url} alt={p.nome}
-                            className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex flex-col items-center justify-center gap-2"
-                            style={{ color: 'var(--text-secondary)' }}>
-                            <ImageIcon size={32} className="opacity-20" />
-                            <span className="text-xs opacity-40">Sem foto</span>
-                          </div>
-                        )}
-                        {uploading && (
-                          <div className="absolute inset-0 flex items-center justify-center"
-                            style={{ background: 'rgba(0,0,0,0.6)' }}>
-                            <RefreshCw size={22} className="spinner" style={{ color: '#F5A623' }} />
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Nome e botão */}
-                      <div className="p-3">
-                        <p className="text-sm font-medium truncate mb-2">{p.nome}</p>
-                        <button
-                          onClick={() => uploadFoto(p)}
-                          disabled={uploading}
-                          className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
-                          style={{
-                            background: p.foto_url ? 'var(--bg)' : '#F5A62320',
-                            border: `1px solid ${p.foto_url ? 'var(--border)' : '#F5A62340'}`,
-                            color: p.foto_url ? 'var(--text-secondary)' : '#F5A623',
-                          }}>
-                          <Upload size={12} />
-                          {p.foto_url ? 'Trocar foto' : 'Adicionar foto'}
-                        </button>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            )}
           </div>
         )}
 

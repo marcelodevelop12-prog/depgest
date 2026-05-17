@@ -22,10 +22,7 @@ export function registerProdutoHandlers() {
         (SELECT SUM(em.quantidade * CASE WHEN em.tipo = 'entrada' THEN 1
                                          WHEN em.tipo = 'saida' THEN -1
                                          ELSE 1 END)
-         FROM estoque_movimentacoes em WHERE em.produto_id = p.id) as saldo_estoque,
-        (SELECT pu.preco_venda FROM produto_unidades pu
-         WHERE pu.produto_id = p.id AND pu.ativo = 1
-         ORDER BY CASE pu.tipo WHEN 'unidade' THEN 0 ELSE 1 END LIMIT 1) as preco_venda
+         FROM estoque_movimentacoes em WHERE em.produto_id = p.id) as saldo_estoque
       FROM produtos p
       LEFT JOIN categorias c ON c.id = p.categoria_id
       WHERE 1=1
@@ -86,14 +83,21 @@ export function registerProdutoHandlers() {
       saveUnidades(db, produtoId, unidades)
     }
 
+    const estoqueInicial = Number(data.estoque_inicial) || 0
+    if (estoqueInicial > 0) {
+      db.prepare(`
+        INSERT INTO estoque_movimentacoes
+          (produto_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo)
+        VALUES (?, 'entrada', ?, 0, ?, 'Estoque inicial')
+      `).run(produtoId, estoqueInicial, estoqueInicial)
+    }
+
     return { id: produtoId }
   })
 
   ipcMain.handle('produtos:update', (_, id: number, data: any) => {
     const db = getDb()
-    const numId = Number(id)
     const { unidades, validades, ...produto } = data
-    id = numId as any
 
     db.prepare(`
       UPDATE produtos SET nome=@nome, marca=@marca, ean=@ean, categoria_id=@categoria_id,
@@ -102,21 +106,11 @@ export function registerProdutoHandlers() {
         controle_validade=@controle_validade, ativo=@ativo,
         updated_at=datetime('now')
       WHERE id=@id
-    `).run({
-      ...produto,
-      id,
-      marca: produto.marca ?? null,
-      ean: produto.ean ?? null,
-      categoria_id: produto.categoria_id ?? null,
-      fornecedor_id: produto.fornecedor_id ?? null,
-      foto_path: produto.foto_path ?? null,
-      descricao: produto.descricao ?? null,
-      localizacao: produto.localizacao ?? null,
-      controle_validade: produto.controle_validade ? 1 : 0,
-      ativo: produto.ativo !== false ? 1 : 0,
-    })
+    `).run({ ...produto, id, controle_validade: produto.controle_validade ? 1 : 0, ativo: produto.ativo !== false ? 1 : 0 })
 
-    if (unidades) saveUnidades(db, id, unidades)
+    if (unidades) {
+      saveUnidades(db, id, unidades)
+    }
 
     return true
   })
@@ -151,8 +145,8 @@ export function registerProdutoHandlers() {
 
   ipcMain.handle('categorias:update', (_, id: number, data: any) => {
     const db = getDb()
-    db.prepare('UPDATE categorias SET nome=?, ordem=?, ativa=?, exibir_cardapio=? WHERE id=?')
-      .run(data.nome, data.ordem || 0, data.ativa !== false ? 1 : 0, data.exibir_cardapio !== undefined ? (data.exibir_cardapio ? 1 : 0) : 1, id)
+    db.prepare('UPDATE categorias SET nome=?, ordem=?, ativa=? WHERE id=?')
+      .run(data.nome, data.ordem || 0, data.ativa !== false ? 1 : 0, id)
     return true
   })
 
@@ -221,38 +215,12 @@ export function registerProdutoHandlers() {
 }
 
 function saveUnidades(db: any, produtoId: number, unidades: any[]) {
-  // Não pode DELETE: estoque_movimentacoes/itens_compra/itens_pedido têm FK para produto_unidades(id) sem CASCADE.
-  // Estratégia: UPSERT por (produto_id, tipo); soft-delete (ativo=0) nas que não vieram.
-  const existentes = db.prepare(
-    'SELECT id, tipo FROM produto_unidades WHERE produto_id = ?'
-  ).all(produtoId) as Array<{ id: number; tipo: string }>
-
-  const tiposEnviados = new Set(unidades.map(u => u.tipo))
-
-  const updateStmt = db.prepare(`
-    UPDATE produto_unidades
-    SET quantidade_base = ?, preco_custo = ?, preco_venda = ?, ativo = 1
-    WHERE produto_id = ? AND tipo = ?
-  `)
-  const insertStmt = db.prepare(`
+  db.prepare('DELETE FROM produto_unidades WHERE produto_id = ?').run(produtoId)
+  const stmt = db.prepare(`
     INSERT INTO produto_unidades (produto_id, tipo, quantidade_base, preco_custo, preco_venda, ativo)
     VALUES (?, ?, ?, ?, ?, 1)
   `)
-  const softDeleteStmt = db.prepare(
-    'UPDATE produto_unidades SET ativo = 0 WHERE id = ?'
-  )
-
-  const tiposExistentes = new Set(existentes.map(e => e.tipo))
-
   for (const u of unidades) {
-    if (tiposExistentes.has(u.tipo)) {
-      updateStmt.run(u.quantidade_base || 1, u.preco_custo || 0, u.preco_venda || 0, produtoId, u.tipo)
-    } else {
-      insertStmt.run(produtoId, u.tipo, u.quantidade_base || 1, u.preco_custo || 0, u.preco_venda || 0)
-    }
-  }
-
-  for (const e of existentes) {
-    if (!tiposEnviados.has(e.tipo)) softDeleteStmt.run(e.id)
+    stmt.run(produtoId, u.tipo, u.quantidade_base || 1, u.preco_custo || 0, u.preco_venda || 0)
   }
 }

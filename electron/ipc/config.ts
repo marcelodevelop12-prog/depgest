@@ -68,33 +68,21 @@ export function registerConfigHandlers() {
 
     // Sync com Supabase
     const licenca = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
-    console.log('[config:save-loja] data recebido:', JSON.stringify(data))
-    console.log('[config:save-loja] licenca.supabase_loja_id:', licenca?.supabase_loja_id ?? 'NULL')
-
-    // Lê configurações salvas do SQLite (campos fixos da loja)
     const configs = db.prepare("SELECT chave, valor FROM configuracoes WHERE chave LIKE 'loja_%'").all() as any[]
     const saved = Object.fromEntries(configs.map(r => [r.chave.replace('loja_', ''), r.valor]))
 
     const nfc = (v: any) => typeof v === 'string' ? v.normalize('NFC') : v
 
-    // Campos fixos: vêm de Configurações → Dados da Loja (saved do SQLite)
-    // Campos dinâmicos: vêm direto de data (enviados pelo Cardápio Online)
-    const tempoEntrega = (data.tempo_entrega as string) || saved.tempo_entrega || null
-    const tempoRetirada = (data.tempo_retirada as string) || saved.tempo_retirada || null
-    const formasPagamento = (data.formas_pagamento as string) || saved.formas_pagamento || null
+    // Campos fixos (nome, telefone, etc.) vêm do SQLite; campos dinâmicos preferem data com fallback para saved
     const logoUrl = (data.logo_url as string) || saved.logo_url || null
     const taxaEntrega = data.taxa_entrega !== undefined ? Number(data.taxa_entrega) : (saved.taxa_entrega ? Number(saved.taxa_entrega) : null)
     const pedidoMinimo = data.pedido_minimo !== undefined ? Number(data.pedido_minimo) : (saved.pedido_minimo ? Number(saved.pedido_minimo) : null)
     const cardapioAtivo = data.cardapio_ativo !== undefined
       ? (data.cardapio_ativo === 'true' || data.cardapio_ativo === true)
       : (saved.cardapio_ativo === 'true')
-
-    console.log('[config:save-loja] campos extraídos de data:', {
-      tempo_entrega: data.tempo_entrega,
-      tempo_retirada: data.tempo_retirada,
-      formas_pagamento: data.formas_pagamento,
-      logo_url: data.logo_url,
-    })
+    const tempoEntrega = (data.tempo_entrega as string) || saved.tempo_entrega || null
+    const tempoRetirada = (data.tempo_retirada as string) || saved.tempo_retirada || null
+    const formasPagamento = (data.formas_pagamento as string) || saved.formas_pagamento || null
 
     const payload = {
       nome: nfc(saved.nome),
@@ -111,21 +99,22 @@ export function registerConfigHandlers() {
       formas_pagamento: formasPagamento,
     }
 
+    console.log('[config:save-loja] licenca.supabase_loja_id:', licenca?.supabase_loja_id ?? 'NULL')
     console.log('[config:save-loja] payload Supabase:', JSON.stringify(payload))
 
     if (licenca?.supabase_loja_id) {
-      console.log('[config:save-loja] → UPDATE id:', licenca.supabase_loja_id)
       const { data: updated, error } = await supabase
         .from('lojas')
         .update(payload)
         .eq('id', licenca.supabase_loja_id)
         .select('tempo_entrega,tempo_retirada,formas_pagamento,taxa_entrega,cardapio_ativo')
         .single()
+
       if (error) {
         console.error('[config:save-loja] UPDATE erro:', error.message, error.details)
         return { ok: false, error: error.message, payload }
       }
-      console.log('[config:save-loja] UPDATE ok — valores confirmados no Supabase:', JSON.stringify(updated))
+      console.log('[config:save-loja] UPDATE ok:', JSON.stringify(updated))
       return { ok: true, updated, payload }
     } else {
       console.log('[config:save-loja] → INSERT novo registro')
@@ -135,7 +124,6 @@ export function registerConfigHandlers() {
           console.error('[config:save-loja] INSERT erro:', error.message, error.details, error.hint)
           return { ok: false, error: error.message, payload }
         } else if (inserted?.id) {
-          console.log('[config:save-loja] INSERT ok, supabase_loja_id:', inserted.id)
           db.prepare('UPDATE licenca SET supabase_loja_id = ?').run(inserted.id)
           return { ok: true, payload }
         }

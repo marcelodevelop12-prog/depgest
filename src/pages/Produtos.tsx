@@ -3,7 +3,7 @@ import { Plus, Search, Edit2, Trash2, X, Upload, Barcode, ToggleLeft, ToggleRigh
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../lib/utils'
 
-interface Categoria { id: number; nome: string; ordem: number; ativa: number; exibir_cardapio: number }
+interface Categoria { id: number; nome: string; ordem: number; ativa: number }
 interface Unidade {
   id?: number
   tipo: 'unidade' | 'fardo' | 'caixa' | 'barril'
@@ -28,14 +28,14 @@ interface Produto {
 }
 
 const MOCK_CATEGORIAS: Categoria[] = [
-  { id: 1, nome: 'Cervejas', ordem: 1, ativa: 1, exibir_cardapio: 1 },
-  { id: 2, nome: 'Refrigerantes', ordem: 2, ativa: 1, exibir_cardapio: 1 },
-  { id: 3, nome: 'Águas', ordem: 3, ativa: 1, exibir_cardapio: 1 },
-  { id: 4, nome: 'Sucos', ordem: 4, ativa: 1, exibir_cardapio: 1 },
-  { id: 5, nome: 'Vinhos', ordem: 5, ativa: 1, exibir_cardapio: 1 },
-  { id: 6, nome: 'Destilados', ordem: 6, ativa: 1, exibir_cardapio: 1 },
-  { id: 7, nome: 'Energéticos', ordem: 7, ativa: 1, exibir_cardapio: 1 },
-  { id: 8, nome: 'Outros', ordem: 8, ativa: 1, exibir_cardapio: 1 },
+  { id: 1, nome: 'Cervejas', ordem: 1, ativa: 1 },
+  { id: 2, nome: 'Refrigerantes', ordem: 2, ativa: 1 },
+  { id: 3, nome: 'Águas', ordem: 3, ativa: 1 },
+  { id: 4, nome: 'Sucos', ordem: 4, ativa: 1 },
+  { id: 5, nome: 'Vinhos', ordem: 5, ativa: 1 },
+  { id: 6, nome: 'Destilados', ordem: 6, ativa: 1 },
+  { id: 7, nome: 'Energéticos', ordem: 7, ativa: 1 },
+  { id: 8, nome: 'Outros', ordem: 8, ativa: 1 },
 ]
 
 const MOCK_PRODUTOS: Produto[] = [
@@ -64,6 +64,7 @@ export default function Produtos() {
   const [form, setForm] = useState({ ...EMPTY_FORM })
   const [unidades, setUnidades] = useState<Unidade[]>([{ ...EMPTY_UNIDADE }])
   const [saving, setSaving] = useState(false)
+  const [estoqueInicial, setEstoqueInicial] = useState(0)
   const [eanLookup, setEanLookup] = useState(false)
   const [xmlModalOpen, setXmlModalOpen] = useState(false)
   const [xmlItems, setXmlItems] = useState<any[]>([])
@@ -98,6 +99,7 @@ export default function Produtos() {
     setEditProduto(null)
     setForm({ ...EMPTY_FORM })
     setUnidades([{ ...EMPTY_UNIDADE }])
+    setEstoqueInicial(0)
     setModalOpen(true)
   }
 
@@ -129,7 +131,7 @@ export default function Produtos() {
         await window.api.produtos.update(editProduto.id, payload)
         toast.success('Produto atualizado')
       } else {
-        await window.api.produtos.create(payload)
+        await window.api.produtos.create({ ...payload, estoque_inicial: estoqueInicial })
         toast.success('Produto criado')
       }
       setModalOpen(false)
@@ -211,7 +213,7 @@ export default function Produtos() {
         return
       }
       if (editCat) {
-        await window.api.categorias.update(editCat.id, { nome: catForm.nome, ordem: catForm.ordem, ativa: editCat.ativa, exibir_cardapio: editCat.exibir_cardapio })
+        await window.api.categorias.update(editCat.id, { nome: catForm.nome, ordem: catForm.ordem, ativa: editCat.ativa })
         toast.success('Categoria atualizada')
       } else {
         await window.api.categorias.create({ nome: catForm.nome, ordem: catForm.ordem })
@@ -233,15 +235,6 @@ export default function Produtos() {
       toast.success('Categoria excluída')
       load()
     } catch { toast.error('Erro ao excluir') }
-  }
-
-  async function toggleExibirCardapio(c: Categoria) {
-    const novoValor = c.exibir_cardapio ? 0 : 1
-    setCategorias(prev => prev.map(x => x.id === c.id ? { ...x, exibir_cardapio: novoValor } : x))
-    if (!window.api) return
-    try {
-      await window.api.categorias.update(c.id, { nome: c.nome, ordem: c.ordem, ativa: c.ativa, exibir_cardapio: novoValor })
-    } catch { toast.error('Erro ao atualizar categoria'); load() }
   }
 
   // ── render ──────────────────────────────────────────────────────────────
@@ -378,7 +371,6 @@ export default function Produtos() {
                     <th className="pb-2 text-left font-semibold px-2" style={{ color: 'var(--text-secondary)' }}>Nome</th>
                     <th className="pb-2 text-center font-semibold px-2 w-20" style={{ color: 'var(--text-secondary)' }}>Ordem</th>
                     <th className="pb-2 text-center font-semibold px-2 w-28" style={{ color: 'var(--text-secondary)' }}>Produtos</th>
-                    <th className="pb-2 text-center font-semibold px-2 w-28" style={{ color: 'var(--text-secondary)' }}>Cardápio</th>
                     <th className="pb-2 w-20"></th>
                   </tr>
                 </thead>
@@ -398,13 +390,6 @@ export default function Produtos() {
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: qtd > 0 ? '#F5A62322' : 'var(--bg)', color: qtd > 0 ? '#F5A623' : 'var(--text-secondary)' }}>
                             {qtd} produto{qtd !== 1 ? 's' : ''}
                           </span>
-                        </td>
-                        <td className="py-3 px-2 text-center">
-                          <button onClick={() => toggleExibirCardapio(c)} title={c.exibir_cardapio ? 'Visível no cardápio' : 'Oculto no cardápio'}>
-                            {c.exibir_cardapio
-                              ? <ToggleRight className="w-6 h-6 mx-auto" style={{ color: '#22C55E' }} />
-                              : <ToggleLeft className="w-6 h-6 mx-auto" style={{ color: 'var(--text-secondary)' }} />}
-                          </button>
                         </td>
                         <td className="py-3 px-2">
                           <div className="flex items-center gap-1 justify-end">
@@ -487,6 +472,36 @@ export default function Produtos() {
                   </button>
                 </div>
               </div>
+
+              {/* Estoque inicial / atual */}
+              {editProduto ? (
+                <div className="flex items-center gap-3 px-4 py-3 rounded-xl" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <span className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Estoque atual</span>
+                  <span className="text-sm font-bold" style={{ color: editProduto.estoque_atual > 0 ? '#22C55E' : '#EF4444' }}>
+                    {editProduto.estoque_atual ?? 0} un.
+                  </span>
+                  <span className="text-xs ml-1" style={{ color: 'var(--text-secondary)' }}>(altere pelo módulo Estoque)</span>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    Quantidade inicial em estoque
+                  </label>
+                  <input
+                    type="number" min="0" step="1"
+                    value={estoqueInicial || ''}
+                    onChange={e => setEstoqueInicial(Math.max(0, Number(e.target.value)))}
+                    placeholder="0"
+                    className="w-40 px-3 py-2 rounded-lg text-sm outline-none"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                  />
+                  {estoqueInicial > 0 && (
+                    <p className="mt-1 text-xs" style={{ color: '#22C55E' }}>
+                      Será criada uma entrada de {estoqueInicial} un. com motivo "Estoque inicial"
+                    </p>
+                  )}
+                </div>
+              )}
 
               {/* Unidades */}
               <div>

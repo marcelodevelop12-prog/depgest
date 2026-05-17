@@ -17,7 +17,6 @@ export default function Financeiro() {
   const [loading, setLoading] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [showPagar, setShowPagar] = useState<any>(null)
-  const [pagarData, setPagarData] = useState({ valor_pago: '', data_pagamento: hojeStr, observacao: '' })
   const [periodo, setPeriodo] = useState({ inicio: inicioMes, fim: hojeStr })
 
   useEffect(() => {
@@ -51,13 +50,8 @@ export default function Financeiro() {
   }
 
   async function pagarConta(id: number) {
-    const valorPago = parseFloat(pagarData.valor_pago) || showPagar.valor
     if (!window.api) { toast.success('Conta paga (mock)'); loadContas(); return }
-    await window.api.financeiro.pagarConta(id, {
-      data_pagamento: pagarData.data_pagamento || hojeStr,
-      valor_pago: valorPago,
-      observacoes: pagarData.observacao || undefined,
-    })
+    await window.api.financeiro.pagarConta(id, { data_pagamento: hojeStr, valor_pago: showPagar.valor })
     toast.success('Conta marcada como paga!')
     setShowPagar(null)
     loadContas()
@@ -172,7 +166,7 @@ export default function Financeiro() {
                           </div>
                         )}
                       </div>
-                      <button onClick={() => { setShowPagar(c); setPagarData({ valor_pago: String(c.valor), data_pagamento: hojeStr, observacao: '' }) }}
+                      <button onClick={() => setShowPagar(c)}
                         className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors"
                         style={{ background: '#22C55E20', color: '#22C55E', border: '1px solid #22C55E40' }}>
                         <Check size={12} className="inline mr-1" />Pagar
@@ -271,37 +265,13 @@ export default function Financeiro() {
       {/* Modal Pagar */}
       {showPagar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.7)' }}>
-          <div className="w-full max-w-sm rounded-2xl p-6 animate-in space-y-4" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Registrar Pagamento</h3>
+          <div className="w-full max-w-sm rounded-2xl p-6 animate-in" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Confirmar Pagamento</h3>
               <button onClick={() => setShowPagar(null)}><X size={16} /></button>
             </div>
-            <div>
-              <p className="text-sm font-medium">{showPagar.descricao}</p>
-              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>Valor original: {formatCurrency(showPagar.valor)}</p>
-            </div>
-            <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>Valor pago (R$)</label>
-              <input type="number" step="0.01" value={pagarData.valor_pago}
-                onChange={e => setPagarData(d => ({ ...d, valor_pago: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl text-sm"
-                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
-            </div>
-            <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>Data do pagamento</label>
-              <input type="date" value={pagarData.data_pagamento}
-                onChange={e => setPagarData(d => ({ ...d, data_pagamento: e.target.value }))}
-                className="w-full px-3 py-2.5 rounded-xl text-sm"
-                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
-            </div>
-            <div>
-              <label className="block text-xs mb-1" style={{ color: 'var(--text-secondary)' }}>Observação (opcional)</label>
-              <textarea value={pagarData.observacao}
-                onChange={e => setPagarData(d => ({ ...d, observacao: e.target.value }))}
-                rows={2} placeholder="Ex: pago via PIX"
-                className="w-full px-3 py-2.5 rounded-xl text-sm resize-none"
-                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
-            </div>
+            <p className="text-sm mb-1">{showPagar.descricao}</p>
+            <p className="text-2xl font-bold mb-4" style={{ color: '#F5A623' }}>{formatCurrency(showPagar.valor)}</p>
             <button onClick={() => pagarConta(showPagar.id)}
               className="w-full py-3 rounded-xl font-semibold text-sm"
               style={{ background: '#22C55E', color: '#fff' }}>
