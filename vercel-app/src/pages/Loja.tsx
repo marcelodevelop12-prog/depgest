@@ -49,6 +49,12 @@ export default function Loja() {
       .single()
 
     if (!lojaData) { setLoading(false); return }
+
+    // Normaliza formas_pagamento: pode vir como string JSON ou array
+    if (lojaData.formas_pagamento && typeof lojaData.formas_pagamento === 'string') {
+      try { lojaData.formas_pagamento = JSON.parse(lojaData.formas_pagamento) } catch { /* mantém string */ }
+    }
+
     setLoja(lojaData)
 
     const { data: cats } = await supabase

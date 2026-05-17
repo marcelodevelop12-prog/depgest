@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Store, Printer, Palette, Shield, Download, Upload, Key, Info, Check, Save } from 'lucide-react'
+import { useEffect, useState, useRef } from 'react'
+import { Store, Printer, Palette, Shield, Download, Upload, Key, Info, Check, Save, Camera } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAppStore } from '../store/app'
 
@@ -11,7 +11,11 @@ export default function Configuracoes() {
   const [loja, setLoja] = useState({
     loja_nome: '', loja_cnpj: '', loja_telefone: '',
     loja_endereco: '', loja_chave_pix: '', loja_codigo: '',
+    loja_logo_url: '', loja_tempo_entrega: '', loja_tempo_retirada: '',
+    loja_formas_pagamento: [] as string[],
   })
+  const [uploadingLogo, setUploadingLogo] = useState(false)
+  const logoInputRef = useRef<HTMLInputElement>(null)
   const [impressora, setImpressora] = useState({
     impressora: '', largura_impressora: '80', rodape_cupom: 'Obrigado pela preferência!',
   })
@@ -34,6 +38,9 @@ export default function Configuracoes() {
       window.api.system.getVersion(),
     ])
 
+    let formasParsed: string[] = []
+    try { formasParsed = JSON.parse(cfg.loja_formas_pagamento || '[]') } catch { formasParsed = [] }
+
     setLoja({
       loja_nome: cfg.loja_nome || '',
       loja_cnpj: cfg.loja_cnpj || '',
@@ -41,6 +48,10 @@ export default function Configuracoes() {
       loja_endereco: cfg.loja_endereco || '',
       loja_chave_pix: cfg.loja_chave_pix || '',
       loja_codigo: cfg.loja_codigo || '',
+      loja_logo_url: cfg.loja_logo_url || '',
+      loja_tempo_entrega: cfg.loja_tempo_entrega || '',
+      loja_tempo_retirada: cfg.loja_tempo_retirada || '',
+      loja_formas_pagamento: formasParsed,
     })
     setImpressora({
       impressora: cfg.impressora || '',
@@ -55,12 +66,48 @@ export default function Configuracoes() {
     setSaving(true)
     try {
       if (window.api) {
-        await window.api.config.saveLoja(loja)
-        await window.api.config.save(loja)
+        const payload = {
+          ...loja,
+          loja_formas_pagamento: JSON.stringify(loja.loja_formas_pagamento),
+        }
+        await window.api.config.saveLoja({
+          nome: loja.loja_nome,
+          cnpj: loja.loja_cnpj,
+          telefone: loja.loja_telefone,
+          endereco: loja.loja_endereco,
+          chave_pix: loja.loja_chave_pix,
+          codigo: loja.loja_codigo,
+          logo_url: loja.loja_logo_url,
+          tempo_entrega: loja.loja_tempo_entrega,
+          tempo_retirada: loja.loja_tempo_retirada,
+          formas_pagamento: JSON.stringify(loja.loja_formas_pagamento),
+        })
+        await window.api.config.save(payload)
       }
       toast.success('Dados da loja salvos!')
     } catch { toast.error('Erro ao salvar') }
     finally { setSaving(false) }
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !window.api) return
+    setUploadingLogo(true)
+    try {
+      const url = await window.api.config.uploadLogo(file.path)
+      setLoja(d => ({ ...d, loja_logo_url: url }))
+      toast.success('Logo enviado!')
+    } catch { toast.error('Erro ao enviar logo') }
+    finally { setUploadingLogo(false) }
+  }
+
+  function toggleFormaPagamento(forma: string) {
+    setLoja(d => ({
+      ...d,
+      loja_formas_pagamento: d.loja_formas_pagamento.includes(forma)
+        ? d.loja_formas_pagamento.filter(f => f !== forma)
+        : [...d.loja_formas_pagamento, forma],
+    }))
   }
 
   async function salvarImpressora() {
@@ -164,6 +211,76 @@ export default function Configuracoes() {
                 {f.hint && <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{f.hint}</p>}
               </div>
             ))}
+
+            {/* Logo da loja */}
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>LOGO DA LOJA</label>
+              <div className="flex items-center gap-4">
+                <div className="w-16 h-16 rounded-full flex items-center justify-center flex-shrink-0 overflow-hidden"
+                  style={{ border: '2px solid #F5A623', background: 'var(--card)' }}>
+                  {loja.loja_logo_url
+                    ? <img src={loja.loja_logo_url} className="w-full h-full object-cover" />
+                    : <Camera size={20} style={{ color: 'var(--text-secondary)' }} />
+                  }
+                </div>
+                <div className="flex-1 space-y-2">
+                  <input ref={logoInputRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                  <button onClick={() => logoInputRef.current?.click()} disabled={uploadingLogo}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium transition-colors"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'var(--card)' }}>
+                    <Camera size={13} />
+                    {uploadingLogo ? 'Enviando...' : 'Escolher imagem'}
+                  </button>
+                  {loja.loja_logo_url && (
+                    <input value={loja.loja_logo_url} readOnly
+                      className="w-full px-3 py-1.5 rounded-lg text-xs font-mono truncate"
+                      style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }} />
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Tempos de entrega / retirada */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>TEMPO DE ENTREGA</label>
+                <input value={loja.loja_tempo_entrega}
+                  onChange={e => setLoja(d => ({ ...d, loja_tempo_entrega: e.target.value }))}
+                  placeholder="ex: 60-90 min"
+                  className="w-full px-4 py-3 rounded-xl text-sm"
+                  style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>TEMPO DE RETIRADA</label>
+                <input value={loja.loja_tempo_retirada}
+                  onChange={e => setLoja(d => ({ ...d, loja_tempo_retirada: e.target.value }))}
+                  placeholder="ex: 30-40 min"
+                  className="w-full px-4 py-3 rounded-xl text-sm"
+                  style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+              </div>
+            </div>
+
+            {/* Formas de pagamento */}
+            <div>
+              <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>FORMAS DE PAGAMENTO ACEITAS</label>
+              <div className="flex gap-3">
+                {['PIX', 'Cartão', 'Dinheiro'].map(forma => {
+                  const ativa = loja.loja_formas_pagamento.includes(forma)
+                  return (
+                    <button key={forma} onClick={() => toggleFormaPagamento(forma)}
+                      className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-colors"
+                      style={{
+                        background: ativa ? '#F5A62318' : 'var(--card)',
+                        border: `1px solid ${ativa ? '#F5A623' : 'var(--border)'}`,
+                        color: ativa ? '#F5A623' : 'var(--text-secondary)',
+                      }}>
+                      {ativa && <Check size={13} />}
+                      {forma}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
 
             <button onClick={salvarLoja} disabled={saving}
               className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold"
