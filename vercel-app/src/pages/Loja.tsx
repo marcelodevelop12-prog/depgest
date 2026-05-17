@@ -103,7 +103,9 @@ export default function Loja() {
       `cardapio_produtos?loja_id=eq.${loja.id}&ativo=eq.true&order=ordem&select=*,cardapio_unidades(*)`
     ).catch(() => [])
 
-    setCategorias(cats || [])
+    const catsArr = cats || []
+    setCategorias(catsArr)
+    if (catsArr.length > 0) setCategoriaAtiva(catsArr[0].id)
     setProdutos(prods || [])
     setLoading(false)
   }
@@ -344,36 +346,43 @@ export default function Loja() {
               </>
             )}
 
-            {loja.formas_pagamento && (
-              <>
-                <span className="mx-4" style={{ color: '#444' }}>·</span>
-                <span className="flex items-center gap-1.5" style={{ color: '#aaa' }}>
-                  💳&nbsp;
-                  {Array.isArray(loja.formas_pagamento)
+            <span className="mx-4" style={{ color: '#444' }}>·</span>
+            <span className="flex items-center gap-1.5" style={{ color: '#aaa' }}>
+              💳&nbsp;
+              {loja.formas_pagamento
+                ? (Array.isArray(loja.formas_pagamento)
                     ? loja.formas_pagamento.join(' · ')
-                    : loja.formas_pagamento}
-                </span>
-              </>
-            )}
+                    : loja.formas_pagamento)
+                : 'PIX · Cartão · Dinheiro'}
+            </span>
           </div>
         </div>
 
-        {/* Linha 3: nav de categorias com emoji + underline âmbar */}
+        {/* Linha 3: nav de categorias */}
         {categorias.length > 0 && (
-          <div className="overflow-x-auto scrollbar-none" style={{ background: '#111', borderBottom: '1px solid #1e1e1e' }}>
-            <div className="flex items-end px-4" style={{ minWidth: 'max-content' }}>
-              {categorias.map(c => (
-                <button key={c.id} onClick={() => setCategoriaAtiva(c.id)}
-                  className="flex-shrink-0 flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap transition-all border-b-2"
-                  style={{
-                    borderColor: categoriaAtiva === c.id ? '#F5A623' : 'transparent',
-                    color: categoriaAtiva === c.id ? '#F5A623' : '#666',
-                    marginBottom: -1,
-                  }}>
-                  {c.emoji && <span className="text-base">{c.emoji}</span>}
-                  {c.nome}
-                </button>
-              ))}
+          <div className="overflow-x-auto scrollbar-none" style={{ background: '#111', borderBottom: '2px solid #1e1e1e' }}>
+            <div className="flex items-stretch px-2" style={{ minWidth: 'max-content' }}>
+              {categorias.map(c => {
+                const ativa = categoriaAtiva === c.id
+                return (
+                  <button key={c.id} onClick={() => setCategoriaAtiva(c.id)}
+                    className="relative flex-shrink-0 flex items-center gap-1.5 px-5 py-3.5 text-sm whitespace-nowrap transition-all"
+                    style={{
+                      fontWeight: ativa ? 700 : 400,
+                      color: ativa ? '#fff' : '#555',
+                      background: 'none',
+                      borderBottom: `2px solid ${ativa ? '#F5A623' : 'transparent'}`,
+                      marginBottom: -2,
+                    }}>
+                    {c.emoji && <span className="text-base leading-none">{c.emoji}</span>}
+                    <span>{c.nome}</span>
+                    {ativa && (
+                      <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full"
+                        style={{ background: 'linear-gradient(90deg,#F5A623,#FFD166)' }} />
+                    )}
+                  </button>
+                )
+              })}
             </div>
           </div>
         )}
