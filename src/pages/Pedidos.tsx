@@ -38,6 +38,7 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: any }> = 
   entregue: { color: '#22C55E', bg: '#22C55E22', icon: CheckCircle },
   cancelado: { color: '#EF4444', bg: '#EF444422', icon: XCircle },
 }
+const STATUS_FALLBACK = { color: '#6B7280', bg: '#6B728022', icon: Clock }
 const ALL_STATUS = ['novo', 'separando', 'a_caminho', 'entregue', 'cancelado'] as const
 type StatusType = typeof ALL_STATUS[number]
 
@@ -76,7 +77,7 @@ export default function Pedidos() {
         toast.success(`Pedido ${novoStatus === 'entregue' ? 'entregue' : 'atualizado'}`)
         return
       }
-      await window.api.pedidos.updateStatus(pedido.id, { status: novoStatus, ...extra })
+      await window.api.pedidos.updateStatus(pedido.id, novoStatus, extra)
       toast.success('Status atualizado')
       load()
     } catch { toast.error('Erro ao atualizar status') }
@@ -154,7 +155,7 @@ export default function Pedidos() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {filtered.map(p => {
-              const cfg = STATUS_CONFIG[p.status]
+              const cfg = STATUS_CONFIG[p.status] ?? STATUS_FALLBACK
               const Icon = cfg.icon
               const isLoading = actionLoading === p.id
               return (
