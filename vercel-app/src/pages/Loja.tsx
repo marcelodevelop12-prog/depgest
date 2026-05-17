@@ -105,7 +105,7 @@ export default function Loja() {
 
     const catsArr = cats || []
     setCategorias(catsArr)
-    if (catsArr.length > 0) setCategoriaAtiva(catsArr[0].id)
+    // categoriaAtiva fica null = "Todos" por padrão
     setProdutos(prods || [])
     setLoading(false)
   }
@@ -332,7 +332,7 @@ export default function Loja() {
               <>
                 <span className="mx-4" style={{ color: '#444' }}>·</span>
                 <span className="flex items-center gap-1.5" style={{ color: '#aaa' }}>
-                  <Clock size={13} style={{ color: '#aaa' }} />
+                  ⏱&nbsp;
                   {loja.tempo_entrega && (
                     <>Entrega&nbsp;<strong style={{ color: '#F5A623', fontWeight: 700 }}>{loja.tempo_entrega}</strong></>
                   )}
@@ -362,6 +362,22 @@ export default function Loja() {
         {categorias.length > 0 && (
           <div className="overflow-x-auto scrollbar-none" style={{ background: '#111', borderBottom: '2px solid #1e1e1e' }}>
             <div className="flex items-stretch px-2" style={{ minWidth: 'max-content' }}>
+              {/* Botão Todos */}
+              <button onClick={() => setCategoriaAtiva(null)}
+                className="relative flex-shrink-0 flex items-center gap-1.5 px-5 py-3.5 text-sm whitespace-nowrap transition-all"
+                style={{
+                  fontWeight: categoriaAtiva === null ? 700 : 400,
+                  color: categoriaAtiva === null ? '#fff' : '#555',
+                  background: 'none',
+                  borderBottom: `2px solid ${categoriaAtiva === null ? '#F5A623' : 'transparent'}`,
+                  marginBottom: -2,
+                }}>
+                Todos
+                {categoriaAtiva === null && (
+                  <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full"
+                    style={{ background: 'linear-gradient(90deg,#F5A623,#FFD166)' }} />
+                )}
+              </button>
               {categorias.map(c => {
                 const ativa = categoriaAtiva === c.id
                 return (
@@ -387,6 +403,20 @@ export default function Loja() {
           </div>
         )}
       </div>
+
+      {/* Banner loja fechada */}
+      {!loja.cardapio_ativo && (
+        <div className="flex items-center gap-3 px-5 py-4 mx-4 mt-4 rounded-2xl"
+          style={{ background: '#dc26261a', border: '1px solid #dc262640' }}>
+          <span className="text-2xl">🔒</span>
+          <div>
+            <p className="font-bold text-sm" style={{ color: '#f87171' }}>Loja fechada no momento</p>
+            <p className="text-xs mt-0.5" style={{ color: '#aaa' }}>
+              Você pode conferir o cardápio mas não é possível fazer pedidos agora.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* ── CATÁLOGO ───────────────────────────────────────────────── */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 pb-32 space-y-10">
@@ -663,9 +693,15 @@ export default function Loja() {
                     </div>
                   </div>
 
-                  <button onClick={finalizarPedido} disabled={enviando}
-                    className="w-full py-4 rounded-xl font-bold text-sm disabled:opacity-50"
-                    style={{ background: '#22C55E', color: '#fff' }}>
+                  {!loja.cardapio_ativo && (
+                    <div className="flex items-center gap-2 px-4 py-3 rounded-xl text-sm"
+                      style={{ background: '#dc26261a', border: '1px solid #dc262640', color: '#f87171' }}>
+                      🔒 Loja fechada — pedidos desabilitados no momento
+                    </div>
+                  )}
+                  <button onClick={finalizarPedido} disabled={enviando || !loja.cardapio_ativo}
+                    className="w-full py-4 rounded-xl font-bold text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{ background: loja.cardapio_ativo ? '#22C55E' : '#444', color: '#fff' }}>
                     {enviando ? 'Enviando pedido...' : `✓ Confirmar Pedido • ${formatCurrency(total)}`}
                   </button>
                 </div>
