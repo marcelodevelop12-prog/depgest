@@ -96,26 +96,38 @@ export function registerConfigHandlers() {
     console.log('[config:save-loja] payload Supabase:', JSON.stringify(payload))
 
     if (licenca?.supabase_loja_id) {
-      console.log('[config:save-loja] → UPDATE existente')
-      const { error } = await supabase.from('lojas').update(payload).eq('id', licenca.supabase_loja_id)
-      if (error) console.error('[config:save-loja] UPDATE erro:', error.message)
-      else console.log('[config:save-loja] UPDATE ok')
+      console.log('[config:save-loja] → UPDATE id:', licenca.supabase_loja_id)
+      const { data: updated, error } = await supabase
+        .from('lojas')
+        .update(payload)
+        .eq('id', licenca.supabase_loja_id)
+        .select('tempo_entrega,tempo_retirada,formas_pagamento,taxa_entrega,cardapio_ativo')
+        .single()
+      if (error) {
+        console.error('[config:save-loja] UPDATE erro:', error.message, error.details)
+        return { ok: false, error: error.message, payload }
+      }
+      console.log('[config:save-loja] UPDATE ok — valores confirmados no Supabase:', JSON.stringify(updated))
+      return { ok: true, updated, payload }
     } else {
       console.log('[config:save-loja] → INSERT novo registro')
       try {
         const { data: inserted, error } = await supabase.from('lojas').insert(payload).select('id').single()
         if (error) {
           console.error('[config:save-loja] INSERT erro:', error.message, error.details, error.hint)
+          return { ok: false, error: error.message, payload }
         } else if (inserted?.id) {
           console.log('[config:save-loja] INSERT ok, supabase_loja_id:', inserted.id)
           db.prepare('UPDATE licenca SET supabase_loja_id = ?').run(inserted.id)
+          return { ok: true, payload }
         }
       } catch (e: any) {
         console.error('[config:save-loja] INSERT exception:', e?.message)
+        return { ok: false, error: e?.message, payload }
       }
     }
 
-    return true
+    return { ok: true, payload }
   })
 
   ipcMain.handle('config:upload-logo', async (_, filePath: string) => {

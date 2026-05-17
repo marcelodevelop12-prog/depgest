@@ -129,7 +129,8 @@ export default function Cardapio() {
   async function salvarConfig() {
     if (!window.api) { toast.success('Configuração salva (mock)'); return }
     const formasJson = JSON.stringify(lojaExtra.formas_pagamento)
-    await window.api.config.save({
+
+    const localPayload = {
       loja_taxa_entrega: config.taxa_entrega,
       loja_pedido_minimo: config.pedido_minimo,
       loja_raio_entrega_km: config.raio_entrega_km,
@@ -137,8 +138,11 @@ export default function Cardapio() {
       loja_tempo_retirada: lojaExtra.tempo_retirada,
       loja_formas_pagamento: formasJson,
       loja_logo_url: lojaExtra.logo_url,
-    })
-    await window.api.config.saveLoja({
+    }
+    console.log('[salvarConfig] config.save payload:', JSON.stringify(localPayload))
+    await window.api.config.save(localPayload)
+
+    const supaPayload = {
       taxa_entrega: parseFloat(config.taxa_entrega),
       pedido_minimo: parseFloat(config.pedido_minimo),
       raio_entrega_km: parseFloat(config.raio_entrega_km),
@@ -146,7 +150,11 @@ export default function Cardapio() {
       tempo_retirada: lojaExtra.tempo_retirada,
       formas_pagamento: formasJson,
       logo_url: lojaExtra.logo_url,
-    })
+    }
+    console.log('[salvarConfig] config.saveLoja payload:', JSON.stringify(supaPayload))
+    const result = await window.api.config.saveLoja(supaPayload)
+    console.log('[salvarConfig] config.saveLoja result:', result)
+
     toast.success('Configurações salvas!')
   }
 
