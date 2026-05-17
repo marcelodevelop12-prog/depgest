@@ -252,99 +252,93 @@ export default function Loja() {
       {/* Header sticky */}
       <div className="sticky top-0 z-30" style={{ background: '#111' }}>
 
-        {/* Linha 1: logo + nome + badge aberto/fechado + carrinho */}
-        <div className="max-w-2xl mx-auto px-4 pt-4 pb-3">
-          <div className="flex items-center gap-3">
-            {/* Logo circular com borda âmbar */}
-            <div className="flex-shrink-0 rounded-full p-0.5" style={{ border: '2px solid #F5A623' }}>
+        {/* Linha 1: logo grande + nome/endereço + badge + carrinho */}
+        <div style={{ borderBottom: '1px solid #1e1e1e' }}>
+          <div className="max-w-6xl mx-auto px-5 py-4 flex items-center gap-4">
+
+            {/* Logo circular maior com borda âmbar */}
+            <div className="flex-shrink-0 rounded-full" style={{ padding: 3, border: '3px solid #F5A623' }}>
               {loja.logo_url
-                ? <img src={loja.logo_url} className="w-12 h-12 rounded-full object-cover block" />
-                : <div className="w-12 h-12 rounded-full flex items-center justify-center text-xl"
+                ? <img src={loja.logo_url} className="w-16 h-16 rounded-full object-cover block" />
+                : <div className="w-16 h-16 rounded-full flex items-center justify-center text-3xl"
                     style={{ background: '#1a1a1a' }}>🍔</div>
               }
             </div>
 
-            {/* Nome + cidade */}
+            {/* Nome + endereço/cidade */}
             <div className="flex-1 min-w-0">
-              <h1 className="font-bold text-base leading-tight truncate">{loja.nome}</h1>
-              {(loja.cidade || loja.estado) && (
-                <p className="text-xs text-gray-500 mt-0.5 uppercase tracking-widest">
-                  {[loja.cidade, loja.estado].filter(Boolean).join(' · ')}
+              <h1 className="font-bold text-xl leading-tight truncate text-white">{loja.nome}</h1>
+              {(loja.cidade || loja.estado || loja.endereco) && (
+                <p className="text-xs mt-1 uppercase tracking-widest truncate" style={{ color: '#666' }}>
+                  {loja.cidade && loja.estado
+                    ? `${loja.cidade} · ${loja.estado}`
+                    : loja.cidade || loja.estado || loja.endereco}
                 </p>
               )}
             </div>
 
-            {/* Badge aberto / fechado */}
-            <div className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold"
+            {/* Badge Aberto / Fechado — fundo sólido */}
+            <div className="flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full text-sm font-semibold"
               style={{
-                background: loja.cardapio_ativo ? '#16a34a1a' : '#dc26261a',
-                border: `1px solid ${loja.cardapio_ativo ? '#16a34a40' : '#dc262640'}`,
-                color: loja.cardapio_ativo ? '#4ade80' : '#f87171',
+                background: loja.cardapio_ativo ? '#16a34a' : '#dc2626',
+                color: '#fff',
               }}>
-              <span className="w-1.5 h-1.5 rounded-full flex-shrink-0"
-                style={{ background: loja.cardapio_ativo ? '#4ade80' : '#f87171' }} />
+              <span className="w-2 h-2 rounded-full flex-shrink-0"
+                style={{ background: 'rgba(255,255,255,0.7)' }} />
               {loja.cardapio_ativo ? 'Aberto' : 'Fechado no momento'}
             </div>
 
             {/* Botão carrinho (quando há itens) */}
             {carrinho.length > 0 && (
               <button onClick={() => setShowCarrinho(true)}
-                className="relative flex items-center gap-2 px-3 py-2 rounded-xl font-semibold text-sm flex-shrink-0"
+                className="relative flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm flex-shrink-0 transition-transform hover:scale-105"
                 style={{ background: '#F5A623', color: '#000' }}>
                 <ShoppingCart size={15} />
-                {formatCurrency(subtotal)}
-                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full text-xs font-bold flex items-center justify-center"
+                <span className="hidden sm:inline">{formatCurrency(subtotal)}</span>
+                <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center"
                   style={{ background: '#EF4444', color: '#fff' }}>
                   {carrinho.reduce((s, i) => s + i.quantidade, 0)}
                 </span>
               </button>
             )}
           </div>
-          {totalItens > 0 && (
-            <button onClick={() => setShowCarrinho(true)}
-              className="relative flex items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm transition-transform hover:scale-105"
-              style={{ background: '#F5A623', color: '#000' }}>
-              <ShoppingCart size={16} />
-              <span className="hidden sm:inline">{formatCurrency(subtotal)}</span>
-              <span className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full text-[10px] font-bold flex items-center justify-center ring-2"
-                style={{ background: '#EF4444', color: '#fff', ['--tw-ring-color' as any]: '#111' }}>
-                {totalItens}
-              </span>
-            </button>
-          )}
         </div>
 
-        {/* Linha 2: barra de informações */}
-        <div className="overflow-x-auto scrollbar-none" style={{ borderTop: '1px solid #1a1a1a', borderBottom: '1px solid #1a1a1a' }}>
-          <div className="flex items-center gap-0 px-4 py-2.5 text-xs whitespace-nowrap min-w-max">
-            <span className="flex items-center gap-1.5 text-gray-400">
-              <Truck size={12} style={{ color: '#F5A623' }} />
+        {/* Linha 2: barra de informações centralizada */}
+        <div className="overflow-x-auto scrollbar-none" style={{ borderBottom: '1px solid #1e1e1e', background: '#0e0e0e' }}>
+          <div className="flex items-center justify-center gap-0 py-3 text-xs whitespace-nowrap px-4"
+            style={{ minWidth: 'max-content', margin: '0 auto' }}>
+
+            <span className="flex items-center gap-1.5" style={{ color: '#aaa' }}>
+              <Truck size={13} style={{ color: '#F5A623' }} />
               Entrega a partir de&nbsp;
-              <span className="font-semibold" style={{ color: '#F5A623' }}>
+              <strong style={{ color: '#F5A623', fontWeight: 700 }}>
                 {loja.taxa_entrega > 0 ? formatCurrency(loja.taxa_entrega) : 'R$ 0,00'}
-              </span>
+              </strong>
             </span>
 
-            <span className="mx-3 text-gray-700">·</span>
+            <span className="mx-4" style={{ color: '#444' }}>·</span>
 
-            <span className="flex items-center gap-1.5 text-gray-400">
-              📋&nbsp;Pedido mínimo&nbsp;
-              <span className="font-semibold" style={{ color: '#F5A623' }}>
+            <span className="flex items-center gap-1.5" style={{ color: '#aaa' }}>
+              📋 Pedido mínimo&nbsp;
+              <strong style={{ color: '#F5A623', fontWeight: 700 }}>
                 {formatCurrency(loja.pedido_minimo || 0)}
-              </span>
+              </strong>
             </span>
 
             {(loja.tempo_entrega || loja.tempo_retirada) && (
               <>
-                <span className="mx-3 text-gray-700">·</span>
-                <span className="flex items-center gap-1.5 text-gray-400">
-                  <Clock size={12} />
+                <span className="mx-4" style={{ color: '#444' }}>·</span>
+                <span className="flex items-center gap-1.5" style={{ color: '#aaa' }}>
+                  <Clock size={13} style={{ color: '#aaa' }} />
                   {loja.tempo_entrega && (
-                    <>Entrega&nbsp;<span className="font-semibold" style={{ color: '#F5A623' }}>{loja.tempo_entrega}</span></>
+                    <>Entrega&nbsp;<strong style={{ color: '#F5A623', fontWeight: 700 }}>{loja.tempo_entrega}</strong></>
                   )}
-                  {loja.tempo_entrega && loja.tempo_retirada && <>&nbsp;·&nbsp;</>}
+                  {loja.tempo_entrega && loja.tempo_retirada && (
+                    <span style={{ color: '#444' }}>&nbsp;·&nbsp;</span>
+                  )}
                   {loja.tempo_retirada && (
-                    <>Retirada&nbsp;<span className="font-semibold" style={{ color: '#F5A623' }}>{loja.tempo_retirada}</span></>
+                    <>Retirada&nbsp;<strong style={{ color: '#F5A623', fontWeight: 700 }}>{loja.tempo_retirada}</strong></>
                   )}
                 </span>
               </>
@@ -352,8 +346,8 @@ export default function Loja() {
 
             {loja.formas_pagamento && (
               <>
-                <span className="mx-3 text-gray-700">·</span>
-                <span className="flex items-center gap-1.5 text-gray-400">
+                <span className="mx-4" style={{ color: '#444' }}>·</span>
+                <span className="flex items-center gap-1.5" style={{ color: '#aaa' }}>
                   💳&nbsp;
                   {Array.isArray(loja.formas_pagamento)
                     ? loja.formas_pagamento.join(' · ')
@@ -364,31 +358,23 @@ export default function Loja() {
           </div>
         </div>
 
-        {/* Linha 3: nav de categorias com underline âmbar */}
+        {/* Linha 3: nav de categorias com emoji + underline âmbar */}
         {categorias.length > 0 && (
-          <div className="flex overflow-x-auto scrollbar-none max-w-2xl mx-auto"
-            style={{ borderBottom: '1px solid #222' }}>
-            <button onClick={() => setCategoriaAtiva(null)}
-              className="flex-shrink-0 flex items-center gap-1 px-4 py-3 text-xs font-medium whitespace-nowrap transition-colors border-b-2"
-              style={{
-                borderColor: !categoriaAtiva ? '#F5A623' : 'transparent',
-                color: !categoriaAtiva ? '#F5A623' : '#666',
-                marginBottom: -1,
-              }}>
-              Todos
-            </button>
-            {categorias.map(c => (
-              <button key={c.id} onClick={() => setCategoriaAtiva(c.id)}
-                className="flex-shrink-0 flex items-center gap-1 px-4 py-3 text-xs font-medium whitespace-nowrap transition-colors border-b-2"
-                style={{
-                  borderColor: categoriaAtiva === c.id ? '#F5A623' : 'transparent',
-                  color: categoriaAtiva === c.id ? '#F5A623' : '#666',
-                  marginBottom: -1,
-                }}>
-                {c.emoji && <span>{c.emoji}</span>}
-                {c.nome}
-              </button>
-            ))}
+          <div className="overflow-x-auto scrollbar-none" style={{ background: '#111', borderBottom: '1px solid #1e1e1e' }}>
+            <div className="flex items-end px-4" style={{ minWidth: 'max-content' }}>
+              {categorias.map(c => (
+                <button key={c.id} onClick={() => setCategoriaAtiva(c.id)}
+                  className="flex-shrink-0 flex items-center gap-1.5 px-4 py-3 text-sm font-medium whitespace-nowrap transition-all border-b-2"
+                  style={{
+                    borderColor: categoriaAtiva === c.id ? '#F5A623' : 'transparent',
+                    color: categoriaAtiva === c.id ? '#F5A623' : '#666',
+                    marginBottom: -1,
+                  }}>
+                  {c.emoji && <span className="text-base">{c.emoji}</span>}
+                  {c.nome}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
