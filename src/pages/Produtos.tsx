@@ -3,7 +3,7 @@ import { Plus, Search, Edit2, Trash2, X, Upload, Barcode, ToggleLeft, ToggleRigh
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../lib/utils'
 
-interface Categoria { id: number; nome: string; ordem: number; ativa: number }
+interface Categoria { id: number; nome: string; ordem: number; ativa: number; exibir_cardapio: number }
 interface Unidade {
   id?: number
   tipo: 'unidade' | 'fardo' | 'caixa' | 'barril'
@@ -28,14 +28,14 @@ interface Produto {
 }
 
 const MOCK_CATEGORIAS: Categoria[] = [
-  { id: 1, nome: 'Cervejas', ordem: 1, ativa: 1 },
-  { id: 2, nome: 'Refrigerantes', ordem: 2, ativa: 1 },
-  { id: 3, nome: 'Águas', ordem: 3, ativa: 1 },
-  { id: 4, nome: 'Sucos', ordem: 4, ativa: 1 },
-  { id: 5, nome: 'Vinhos', ordem: 5, ativa: 1 },
-  { id: 6, nome: 'Destilados', ordem: 6, ativa: 1 },
-  { id: 7, nome: 'Energéticos', ordem: 7, ativa: 1 },
-  { id: 8, nome: 'Outros', ordem: 8, ativa: 1 },
+  { id: 1, nome: 'Cervejas', ordem: 1, ativa: 1, exibir_cardapio: 1 },
+  { id: 2, nome: 'Refrigerantes', ordem: 2, ativa: 1, exibir_cardapio: 1 },
+  { id: 3, nome: 'Águas', ordem: 3, ativa: 1, exibir_cardapio: 1 },
+  { id: 4, nome: 'Sucos', ordem: 4, ativa: 1, exibir_cardapio: 1 },
+  { id: 5, nome: 'Vinhos', ordem: 5, ativa: 1, exibir_cardapio: 1 },
+  { id: 6, nome: 'Destilados', ordem: 6, ativa: 1, exibir_cardapio: 1 },
+  { id: 7, nome: 'Energéticos', ordem: 7, ativa: 1, exibir_cardapio: 1 },
+  { id: 8, nome: 'Outros', ordem: 8, ativa: 1, exibir_cardapio: 1 },
 ]
 
 const MOCK_PRODUTOS: Produto[] = [
@@ -211,7 +211,7 @@ export default function Produtos() {
         return
       }
       if (editCat) {
-        await window.api.categorias.update(editCat.id, { nome: catForm.nome, ordem: catForm.ordem, ativa: editCat.ativa })
+        await window.api.categorias.update(editCat.id, { nome: catForm.nome, ordem: catForm.ordem, ativa: editCat.ativa, exibir_cardapio: editCat.exibir_cardapio })
         toast.success('Categoria atualizada')
       } else {
         await window.api.categorias.create({ nome: catForm.nome, ordem: catForm.ordem })
@@ -233,6 +233,15 @@ export default function Produtos() {
       toast.success('Categoria excluída')
       load()
     } catch { toast.error('Erro ao excluir') }
+  }
+
+  async function toggleExibirCardapio(c: Categoria) {
+    const novoValor = c.exibir_cardapio ? 0 : 1
+    setCategorias(prev => prev.map(x => x.id === c.id ? { ...x, exibir_cardapio: novoValor } : x))
+    if (!window.api) return
+    try {
+      await window.api.categorias.update(c.id, { nome: c.nome, ordem: c.ordem, ativa: c.ativa, exibir_cardapio: novoValor })
+    } catch { toast.error('Erro ao atualizar categoria'); load() }
   }
 
   // ── render ──────────────────────────────────────────────────────────────
@@ -369,6 +378,7 @@ export default function Produtos() {
                     <th className="pb-2 text-left font-semibold px-2" style={{ color: 'var(--text-secondary)' }}>Nome</th>
                     <th className="pb-2 text-center font-semibold px-2 w-20" style={{ color: 'var(--text-secondary)' }}>Ordem</th>
                     <th className="pb-2 text-center font-semibold px-2 w-28" style={{ color: 'var(--text-secondary)' }}>Produtos</th>
+                    <th className="pb-2 text-center font-semibold px-2 w-28" style={{ color: 'var(--text-secondary)' }}>Cardápio</th>
                     <th className="pb-2 w-20"></th>
                   </tr>
                 </thead>
@@ -388,6 +398,13 @@ export default function Produtos() {
                           <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: qtd > 0 ? '#F5A62322' : 'var(--bg)', color: qtd > 0 ? '#F5A623' : 'var(--text-secondary)' }}>
                             {qtd} produto{qtd !== 1 ? 's' : ''}
                           </span>
+                        </td>
+                        <td className="py-3 px-2 text-center">
+                          <button onClick={() => toggleExibirCardapio(c)} title={c.exibir_cardapio ? 'Visível no cardápio' : 'Oculto no cardápio'}>
+                            {c.exibir_cardapio
+                              ? <ToggleRight className="w-6 h-6 mx-auto" style={{ color: '#22C55E' }} />
+                              : <ToggleLeft className="w-6 h-6 mx-auto" style={{ color: 'var(--text-secondary)' }} />}
+                          </button>
                         </td>
                         <td className="py-3 px-2">
                           <div className="flex items-center gap-1 justify-end">

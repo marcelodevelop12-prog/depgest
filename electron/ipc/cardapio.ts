@@ -36,10 +36,12 @@ export function registerCardapioHandlers() {
     const placeholders = produtoIds.map(() => '?').join(',')
     const produtos = db.prepare(`
       SELECT p.id, p.nome, p.descricao, p.ativo, p.foto_path,
-             c.id as cat_id, c.nome as cat_nome, c.ordem as cat_ordem
+             c.id as cat_id, c.nome as cat_nome, c.ordem as cat_ordem,
+             c.exibir_cardapio
       FROM produtos p
       LEFT JOIN categorias c ON c.id = p.categoria_id
       WHERE p.id IN (${placeholders})
+        AND (c.exibir_cardapio IS NULL OR c.exibir_cardapio = 1)
     `).all(...produtoIds) as any[]
 
     if (produtos.length === 0) return { ok: true, synced: 0 }

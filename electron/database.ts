@@ -295,4 +295,16 @@ function createSchema() {
     INSERT OR IGNORE INTO configuracoes (chave, valor) VALUES ('rodape_cupom', 'Obrigado pela preferência!');
     INSERT OR IGNORE INTO configuracoes (chave, valor) VALUES ('pedido_numero_seq', '1');
   `)
+
+  // Migrations incrementais (idempotentes)
+  try {
+    db.exec('ALTER TABLE categorias ADD COLUMN exibir_cardapio INTEGER DEFAULT 1')
+  } catch { /* coluna já existe */ }
+
+  // Remove contas pré-cadastradas com valor = 0 (seed antigo)
+  db.exec(`
+    DELETE FROM financeiro_contas
+    WHERE valor = 0
+      AND descricao IN ('Aluguel','Energia Elétrica','Água','Internet','Telefone','Contador','IPTU','Salários')
+  `)
 }

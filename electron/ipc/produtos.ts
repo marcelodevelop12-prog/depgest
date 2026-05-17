@@ -151,8 +151,8 @@ export function registerProdutoHandlers() {
 
   ipcMain.handle('categorias:update', (_, id: number, data: any) => {
     const db = getDb()
-    db.prepare('UPDATE categorias SET nome=?, ordem=?, ativa=? WHERE id=?')
-      .run(data.nome, data.ordem || 0, data.ativa !== false ? 1 : 0, id)
+    db.prepare('UPDATE categorias SET nome=?, ordem=?, ativa=?, exibir_cardapio=? WHERE id=?')
+      .run(data.nome, data.ordem || 0, data.ativa !== false ? 1 : 0, data.exibir_cardapio !== undefined ? (data.exibir_cardapio ? 1 : 0) : 1, id)
     return true
   })
 
