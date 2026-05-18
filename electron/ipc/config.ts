@@ -112,13 +112,23 @@ export function registerConfigHandlers() {
     } else {
       console.log('[config:save-loja] → INSERT novo registro')
       try {
-        const { data: inserted, error } = await supabase.from('lojas').insert(payload).select('id').single()
+        const { data: lic, error: licErr } = await supabase
+          .from('licencas')
+          .select('id')
+          .eq('chave', licenca.chave)
+          .single()
+        if (licErr || !lic?.id) {
+          console.error('[config:save-loja] lookup licenca_id erro:', licErr?.message)
+          return { ok: false, error: licErr?.message || 'Licença não encontrada no Supabase', payload }
+        }
+        const insertPayload = { ...payload, licenca_id: lic.id }
+        const { data: inserted, error } = await supabase.from('lojas').insert(insertPayload).select('id').single()
         if (error) {
           console.error('[config:save-loja] INSERT erro:', error.message, error.details, error.hint)
-          return { ok: false, error: error.message, payload }
+          return { ok: false, error: error.message, payload: insertPayload }
         } else if (inserted?.id) {
           db.prepare('UPDATE licenca SET supabase_loja_id = ?').run(inserted.id)
-          return { ok: true, payload }
+          return { ok: true, payload: insertPayload }
         }
       } catch (e: any) {
         console.error('[config:save-loja] INSERT exception:', e?.message)
