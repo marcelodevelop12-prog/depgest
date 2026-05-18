@@ -10,6 +10,8 @@ export default function Ativacao({ onSuccess }: Props) {
   const [chave, setChave] = useState('')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
+  const [aceito, setAceito] = useState(false)
+  const [modalAberto, setModalAberto] = useState(false)
 
   function formatarChave(value: string) {
     const limpo = value.toUpperCase().replace(/[^A-Z0-9]/g, '')
@@ -67,15 +69,14 @@ export default function Ativacao({ onSuccess }: Props) {
 
       <div className="flex-1 flex items-center justify-center p-8">
         <div className="w-full max-w-md animate-in">
-          {/* Logo */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl mb-6"
-              style={{ background: '#F5A62320', border: '2px solid #F5A62340' }}>
-              <span className="text-4xl">🍺</span>
-            </div>
-            <h1 className="text-4xl font-bold mb-2" style={{ color: '#F5A623' }}>DepGest</h1>
-            <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-              Sistema de Gestão para Depósito de Bebidas
+          {/* Wordmark */}
+          <div className="text-center mb-14">
+            <h1 className="font-bold leading-none" style={{ fontSize: 48 }}>
+              <span style={{ color: '#FFFFFF' }}>Dep</span><span style={{ color: '#F5A623' }}>Gest</span>
+            </h1>
+            <p className="mt-2 font-medium tracking-widest uppercase"
+              style={{ fontSize: 12, letterSpacing: 3, color: '#888888' }}>
+              Sistema de Gestão
             </p>
           </div>
 
@@ -126,9 +127,31 @@ export default function Ativacao({ onSuccess }: Props) {
                 </div>
               )}
 
+              {/* Aceite dos termos */}
+              <label className="flex items-start gap-3 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={aceito}
+                  onChange={e => setAceito(e.target.checked)}
+                  className="mt-0.5 flex-shrink-0 accent-amber-400"
+                  style={{ width: 16, height: 16 }}
+                />
+                <span className="text-xs leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
+                  Li e aceito os{' '}
+                  <button
+                    type="button"
+                    onClick={() => setModalAberto(true)}
+                    className="underline underline-offset-2 hover:opacity-80 transition-opacity"
+                    style={{ color: '#F5A623' }}
+                  >
+                    Termos de Uso e a Política de Privacidade
+                  </button>
+                </span>
+              </label>
+
               <button
                 onClick={ativar}
-                disabled={loading || chave.length < 17}
+                disabled={loading || chave.length < 17 || !aceito}
                 className="w-full py-3 rounded-xl font-semibold text-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 style={{ background: '#F5A623', color: '#000' }}
               >
@@ -158,6 +181,77 @@ export default function Ativacao({ onSuccess }: Props) {
           </p>
         </div>
       </div>
+
+      {/* Modal Termos de Uso e Política de Privacidade */}
+      {modalAberto && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-6"
+          style={{ background: 'rgba(0,0,0,0.75)' }}
+          onClick={e => { if (e.target === e.currentTarget) setModalAberto(false) }}
+        >
+          <div
+            className="w-full max-w-lg rounded-2xl flex flex-col"
+            style={{ background: 'var(--card)', border: '1px solid var(--border)', maxHeight: '80vh' }}
+          >
+            {/* Cabeçalho */}
+            <div className="px-6 pt-6 pb-4 flex-shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+              <h2 className="font-bold text-base">Termos de Uso e Política de Privacidade</h2>
+              <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>DepGest — Agência Converte Bot</p>
+            </div>
+
+            {/* Conteúdo com scroll */}
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5 text-sm" style={{ color: 'var(--text-secondary)', lineHeight: 1.65 }}>
+              <section>
+                <h3 className="font-bold mb-1" style={{ color: 'var(--text-primary)' }}>TERMOS DE USO — DepGest</h3>
+                <p>Ao ativar esta licença, você concorda com os termos abaixo.</p>
+              </section>
+
+              <section>
+                <h4 className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>1. LICENÇA DE USO</h4>
+                <p>Licença pessoal, intransferível e vitalícia para uso em um único dispositivo vinculado ao hardware ativado. É proibido transferir, revender, sublicenciar ou compartilhar a chave com terceiros.</p>
+              </section>
+
+              <section>
+                <h4 className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>2. PAGAMENTO E REEMBOLSO</h4>
+                <p>Pagamento único, sem mensalidade. Reembolso disponível em até 7 dias corridos após a ativação, conforme o Código de Defesa do Consumidor.</p>
+              </section>
+
+              <section>
+                <h4 className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>3. RESPONSABILIDADE</h4>
+                <p>O Usuário é responsável pelo backup dos dados. A Agência Converte Bot não se responsabiliza por perda de dados por falha de hardware, vírus ou ausência de backup.</p>
+              </section>
+
+              <section>
+                <h4 className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>4. CANCELAMENTO</h4>
+                <p>A licença pode ser cancelada por violação dos termos, sem direito a reembolso.</p>
+              </section>
+
+              <section>
+                <h4 className="font-semibold mb-1" style={{ color: 'var(--text-primary)' }}>5. PROPRIEDADE INTELECTUAL</h4>
+                <p>O software é propriedade exclusiva da Agência Converte Bot, protegido pela Lei nº 9.609/1998.</p>
+              </section>
+
+              <div style={{ borderTop: '1px solid var(--border)', paddingTop: '1.25rem' }}>
+                <h3 className="font-bold mb-2" style={{ color: 'var(--text-primary)' }}>POLÍTICA DE PRIVACIDADE</h3>
+                <p>Coletamos nome, CNPJ e identificador de hardware para ativação da licença. Dados dos seus clientes ficam armazenados localmente no seu dispositivo e não são acessados pela Agência Converte Bot. Dados de pedidos online são armazenados em nuvem apenas para funcionamento do cardápio e rastreio. Não vendemos dados.</p>
+                <p className="mt-2">Contato: <span style={{ color: '#F5A623' }}>convertebot@gmail.com</span></p>
+                <p className="mt-2">Foro: Nova Iguaçu/RJ. Lei brasileira aplicável.</p>
+              </div>
+            </div>
+
+            {/* Rodapé */}
+            <div className="px-6 py-4 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+              <button
+                onClick={() => setModalAberto(false)}
+                className="w-full py-2.5 rounded-xl font-semibold text-sm transition-opacity hover:opacity-80"
+                style={{ background: 'var(--border)', color: 'var(--text-primary)' }}
+              >
+                Fechar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

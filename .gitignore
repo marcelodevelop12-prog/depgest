@@ -7,5 +7,6 @@ release
 *.db-wal
 .env
 .env.local
+.env.electron
 vercel-app/node_modules
 vercel-app/dist

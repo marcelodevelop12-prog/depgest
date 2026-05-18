@@ -4,15 +4,8 @@ import { XMLParser } from 'fast-xml-parser'
 import fs from 'fs'
 import path from 'path'
 import { app } from 'electron'
-import { createClient } from '@supabase/supabase-js'
-import ws from 'ws'
 import https from 'https'
-
-const supabase = createClient(
-  'https://vxrhlljvjqdbpfngpzro.supabase.co',
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZ4cmhsbGp2anFkYnBmbmdwenJvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4NzQ1MDAsImV4cCI6MjA5NDQ1MDUwMH0.UTzP5lf2x7GnEw8nsuoe_qnywe-JpO1ApDtfS1RLjD0',
-  { realtime: { transport: ws as any } }
-)
+import { supabaseAdmin as supabase } from '../lib/supabase'
 
 export function registerProdutoHandlers() {
   ipcMain.handle('produtos:list', (_, filters: any = {}) => {
@@ -22,7 +15,14 @@ export function registerProdutoHandlers() {
         (SELECT SUM(em.quantidade * CASE WHEN em.tipo = 'entrada' THEN 1
                                          WHEN em.tipo = 'saida' THEN -1
                                          ELSE 1 END)
-         FROM estoque_movimentacoes em WHERE em.produto_id = p.id) as saldo_estoque
+         FROM estoque_movimentacoes em WHERE em.produto_id = p.id) as saldo_estoque,
+        COALESCE(
+          (SELECT preco_venda FROM produto_unidades
+            WHERE produto_id = p.id AND ativo = 1
+            ORDER BY CASE WHEN tipo = 'unidade' THEN 0 ELSE 1 END, id
+            LIMIT 1),
+          0
+        ) as preco_venda
       FROM produtos p
       LEFT JOIN categorias c ON c.id = p.categoria_id
       WHERE 1=1
@@ -43,7 +43,8 @@ export function registerProdutoHandlers() {
     }
 
     sql += ' ORDER BY p.nome'
-    return db.prepare(sql).all(...params)
+    const rows = db.prepare(sql).all(...params) as any[]
+    return rows.map(r => ({ ...r, estoque_atual: r.saldo_estoque ?? 0 }))
   })
 
   ipcMain.handle('produtos:get', (_, id: number) => {

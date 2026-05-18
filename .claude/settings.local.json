@@ -1,7 +1,15 @@
 {
   "permissions": {
     "allow": [
-      "PowerShell(git -C C:\\\\Users\\\\ANDERSON\\\\DEPGEST log --oneline -5 2>&1)"
+      "PowerShell(git -C C:\\\\Users\\\\ANDERSON\\\\DEPGEST log --oneline -5 2>&1)",
+      "Bash(npm run *)",
+      "PowerShell(ls C:\\\\Users\\\\ANDERSON\\\\DEPGEST\\\\release\\\\ | Select-Object Name, @{N='Size\\(MB\\)';E={[math]::Round\\($_.Length/1MB,1\\)}})",
+      "PowerShell($env:PATH = \"C:\\\\Program Files\\\\GitHub CLI;$env:PATH\"; gh auth status 2>&1)",
+      "mcp__4726faba-c736-4ec6-8e24-f5309a84d8e2__execute_sql",
+      "Bash(npx vercel *)",
+      "mcp__4726faba-c736-4ec6-8e24-f5309a84d8e2__apply_migration",
+      "Bash(xargs grep -l \"foto\\\\|writeFile\\\\|save.*File\")",
+      "mcp__4726faba-c736-4ec6-8e24-f5309a84d8e2__list_tables"
     ]
   }
 }
