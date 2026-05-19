@@ -11,6 +11,7 @@ export default function Configuracoes() {
   const [loja, setLoja] = useState({
     loja_nome: '', loja_cnpj: '', loja_telefone: '',
     loja_endereco: '', loja_chave_pix: '', loja_codigo: '',
+    loja_cardapio_ativo: 'false',
   })
   const [impressora, setImpressora] = useState({
     impressora: '', largura_impressora: '80', rodape_cupom: 'Obrigado pela preferência!',
@@ -25,7 +26,7 @@ export default function Configuracoes() {
 
   async function loadAll() {
     if (!window.api) {
-      setLoja({ loja_nome: 'Depósito Demo', loja_cnpj: '', loja_telefone: '', loja_endereco: '', loja_chave_pix: '', loja_codigo: 'demo' })
+      setLoja({ loja_nome: 'Depósito Demo', loja_cnpj: '', loja_telefone: '', loja_endereco: '', loja_chave_pix: '', loja_codigo: 'demo', loja_cardapio_ativo: 'false' })
       return
     }
     const [cfg, lic, ver] = await Promise.all([
@@ -41,6 +42,7 @@ export default function Configuracoes() {
       loja_endereco: cfg.loja_endereco || '',
       loja_chave_pix: cfg.loja_chave_pix || '',
       loja_codigo: cfg.loja_codigo || '',
+      loja_cardapio_ativo: cfg.loja_cardapio_ativo || 'false',
     })
     setImpressora({
       impressora: cfg.impressora || '',
@@ -62,6 +64,7 @@ export default function Configuracoes() {
           endereco: loja.loja_endereco,
           chave_pix: loja.loja_chave_pix,
           codigo: loja.loja_codigo,
+          cardapio_ativo: loja.loja_cardapio_ativo,
         })
         await window.api.config.save(loja)
       }
@@ -171,6 +174,29 @@ export default function Configuracoes() {
                 {f.hint && <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{f.hint}</p>}
               </div>
             ))}
+
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>Cardápio online ativo</label>
+              <button
+                type="button"
+                onClick={() => setLoja(d => ({ ...d, loja_cardapio_ativo: d.loja_cardapio_ativo === 'true' ? 'false' : 'true' }))}
+                className="w-full flex items-center justify-between px-4 py-3 rounded-xl text-sm transition-colors"
+                style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              >
+                <span style={{ color: 'var(--text-secondary)' }}>
+                  {loja.loja_cardapio_ativo === 'true' ? 'Ativo — clientes podem ver e fazer pedidos' : 'Inativo — cardápio público desabilitado'}
+                </span>
+                <span
+                  className="relative inline-flex items-center flex-shrink-0 w-11 h-6 rounded-full transition-colors"
+                  style={{ background: loja.loja_cardapio_ativo === 'true' ? '#F5A623' : 'var(--border)' }}
+                >
+                  <span
+                    className="inline-block w-5 h-5 rounded-full bg-white shadow transition-transform"
+                    style={{ transform: loja.loja_cardapio_ativo === 'true' ? 'translateX(22px)' : 'translateX(2px)' }}
+                  />
+                </span>
+              </button>
+            </div>
 
             <button onClick={salvarLoja} disabled={saving}
               className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold"
