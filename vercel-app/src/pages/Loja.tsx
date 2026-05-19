@@ -54,7 +54,7 @@ export default function Loja() {
     let lojaData: any = null
     try {
       const res = await fetch(
-        `${SUPA_URL}/rest/v1/lojas?codigo=eq.${encodeURIComponent(codigo!)}&select=*`,
+        `${SUPA_URL}/rest/v1/lojas?codigo=ilike.${encodeURIComponent(codigo!)}&select=*`,
         {
           headers: {
             'apikey': SUPA_KEY,
