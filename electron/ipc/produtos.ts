@@ -299,12 +299,30 @@ export function registerProdutoHandlers() {
 }
 
 function saveUnidades(db: any, produtoId: number, unidades: any[]) {
-  db.prepare('DELETE FROM produto_unidades WHERE produto_id = ?').run(produtoId)
-  const stmt = db.prepare(`
+  // NÃO deletar — estoque_movimentacoes tem FK para produto_unidades(id)
+  // Usar UPDATE se já existe o tipo, INSERT se não existe
+  const getExisting = db.prepare('SELECT id FROM produto_unidades WHERE produto_id = ? AND tipo = ?')
+  const updateStmt = db.prepare(
+    'UPDATE produto_unidades SET quantidade_base=?, preco_custo=?, preco_venda=?, ativo=1 WHERE id=?'
+  )
+  const insertStmt = db.prepare(`
     INSERT INTO produto_unidades (produto_id, tipo, quantidade_base, preco_custo, preco_venda, ativo)
     VALUES (?, ?, ?, ?, ?, 1)
   `)
+
+  const tiposNovos = new Set(unidades.map(u => u.tipo))
+
   for (const u of unidades) {
-    stmt.run(produtoId, u.tipo, u.quantidade_base || 1, u.preco_custo || 0, u.preco_venda || 0)
+    const existing = getExisting.get(produtoId, u.tipo) as any
+    if (existing) {
+      updateStmt.run(u.quantidade_base || 1, u.preco_custo || 0, u.preco_venda || 0, existing.id)
+    } else {
+      insertStmt.run(produtoId, u.tipo, u.quantidade_base || 1, u.preco_custo || 0, u.preco_venda || 0)
+    }
   }
+
+  // Desativar (não deletar) tipos que foram removidos da lista
+  db.prepare(
+    `UPDATE produto_unidades SET ativo=0 WHERE produto_id=? AND tipo NOT IN (${[...tiposNovos].map(() => '?').join(',')})`
+  ).run(produtoId, ...[...tiposNovos])
 }
