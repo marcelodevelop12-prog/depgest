@@ -103,10 +103,18 @@ export default function Produtos() {
     setModalOpen(true)
   }
 
-  function openEdit(p: Produto) {
+  async function openEdit(p: Produto) {
     setEditProduto(p)
-    setForm({ nome: p.nome, marca: p.marca, ean: p.ean, categoria_id: p.categoria_id, estoque_minimo: p.estoque_minimo, localizacao: p.localizacao, controle_validade: p.controle_validade, ativo: p.ativo })
-    setUnidades(p.unidades?.length ? p.unidades : [{ ...EMPTY_UNIDADE }])
+    setForm({ nome: p.nome ?? '', marca: p.marca ?? '', ean: p.ean ?? '', categoria_id: p.categoria_id, estoque_minimo: p.estoque_minimo ?? 0, localizacao: p.localizacao ?? '', controle_validade: p.controle_validade, ativo: p.ativo })
+    // Carrega unidades reais do produto (lista não inclui unidades)
+    if (window.api) {
+      try {
+        const detail = await window.api.produtos.get(p.id)
+        setUnidades(detail?.unidades?.length ? detail.unidades : [{ ...EMPTY_UNIDADE }])
+      } catch { setUnidades([{ ...EMPTY_UNIDADE }]) }
+    } else {
+      setUnidades(p.unidades?.length ? p.unidades : [{ ...EMPTY_UNIDADE }])
+    }
     setModalOpen(true)
   }
 
@@ -128,7 +136,8 @@ export default function Produtos() {
         return
       }
       if (editProduto) {
-        await window.api.produtos.update(editProduto.id, payload)
+        const res = await window.api.produtos.update(editProduto.id, payload)
+        if (res && !res.ok) { toast.error('Erro: ' + res.error); return }
         toast.success('Produto atualizado')
       } else {
         await window.api.produtos.create({ ...payload, estoque_inicial: estoqueInicial })
@@ -136,7 +145,7 @@ export default function Produtos() {
       }
       setModalOpen(false)
       load()
-    } catch { toast.error('Erro ao salvar') }
+    } catch (e: any) { toast.error('Erro ao salvar: ' + (e?.message || String(e))) }
     finally { setSaving(false) }
   }
 

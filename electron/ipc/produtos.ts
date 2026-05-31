@@ -98,22 +98,40 @@ export function registerProdutoHandlers() {
 
   ipcMain.handle('produtos:update', (_, id: number, data: any) => {
     const db = getDb()
-    const { unidades, validades, ...produto } = data
+    try {
+      const { unidades, validades, estoque_atual, saldo_estoque, preco_venda, categoria, categoria_nome, created_at, ...produto } = data
 
-    db.prepare(`
-      UPDATE produtos SET nome=@nome, marca=@marca, ean=@ean, categoria_id=@categoria_id,
-        fornecedor_id=@fornecedor_id, foto_path=@foto_path, descricao=@descricao,
-        estoque_minimo=@estoque_minimo, localizacao=@localizacao,
-        controle_validade=@controle_validade, ativo=@ativo,
-        updated_at=datetime('now')
-      WHERE id=@id
-    `).run({ ...produto, id, controle_validade: produto.controle_validade ? 1 : 0, ativo: produto.ativo !== false ? 1 : 0 })
+      db.prepare(`
+        UPDATE produtos SET nome=@nome, marca=@marca, ean=@ean, categoria_id=@categoria_id,
+          fornecedor_id=@fornecedor_id, foto_path=@foto_path, descricao=@descricao,
+          estoque_minimo=@estoque_minimo, localizacao=@localizacao,
+          controle_validade=@controle_validade, ativo=@ativo,
+          updated_at=datetime('now')
+        WHERE id=@id
+      `).run({
+        nome: produto.nome || null,
+        marca: produto.marca || null,
+        ean: produto.ean || null,
+        categoria_id: produto.categoria_id || null,
+        fornecedor_id: produto.fornecedor_id || null,
+        foto_path: produto.foto_path || null,
+        descricao: produto.descricao || null,
+        estoque_minimo: Number(produto.estoque_minimo) || 0,
+        localizacao: produto.localizacao || null,
+        controle_validade: produto.controle_validade ? 1 : 0,
+        ativo: produto.ativo !== false ? 1 : 0,
+        id,
+      })
 
-    if (unidades) {
-      saveUnidades(db, id, unidades)
+      if (unidades?.length) {
+        saveUnidades(db, id, unidades)
+      }
+
+      return { ok: true }
+    } catch (e: any) {
+      console.error('[produtos:update] ERRO id=' + id + ':', e?.message, e?.stack)
+      return { ok: false, error: e?.message }
     }
-
-    return true
   })
 
   ipcMain.handle('produtos:delete', (_, id: number) => {
