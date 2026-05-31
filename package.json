@@ -5,15 +5,17 @@
   "author": "DepGest",
   "main": "dist-electron/main.js",
   "scripts": {
+    "postinstall": "node scripts/setup-sqlite.js",
     "dev": "concurrently \"npm run dev:vite\" \"npm run dev:electron\"",
     "dev:vite": "vite",
     "dev:electron": "wait-on http://localhost:5173 && electron .",
     "build": "npm run build:vite && npm run build:electron",
     "build:vite": "tsc && vite build",
     "build:electron": "tsc -p tsconfig.electron.json",
-    "dist": "npm run build && electron-builder",
+    "dist": "npm run build && electron-builder --win",
     "dist:win": "npm run build && electron-builder --win",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "sqlite:setup": "node scripts/setup-sqlite.js"
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.0.5",
@@ -61,6 +63,7 @@
     "drizzle-kit": "^0.20.14",
     "electron": "^28.2.4",
     "electron-builder": "^24.9.1",
+    "electron-rebuild": "^3.2.9",
     "postcss": "^8.4.35",
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3",
