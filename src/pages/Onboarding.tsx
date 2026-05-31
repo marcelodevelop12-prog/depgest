@@ -50,7 +50,7 @@ export default function Onboarding({ onComplete }: Props) {
           nome: data.loja_nome,
           cnpj: data.loja_cnpj,
           telefone: data.loja_telefone,
-          endereco: `${data.loja_endereco}, ${data.loja_bairro}, ${data.loja_cidade}`,
+          endereco: [data.loja_endereco, data.loja_bairro, data.loja_cidade].map(s => (s || '').trim()).filter(Boolean).join(', '),
           chave_pix: data.loja_chave_pix,
         })
       }

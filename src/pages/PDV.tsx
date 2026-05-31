@@ -692,9 +692,22 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 
 function CupomModal({ venda, onClose }: { venda: any; onClose: () => void }) {
   const { loja } = useAppStore()
+  const l = (loja || {}) as any
   const now = new Date()
   const dataStr = now.toLocaleDateString('pt-BR')
   const horaStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+  const [rodape, setRodape] = useState('Obrigado pela preferência!')
+  useEffect(() => {
+    if (window.api) {
+      window.api.config.get().then(cfg => {
+        if (cfg?.rodape_cupom) setRodape(cfg.rodape_cupom)
+      }).catch(() => {})
+    }
+  }, [])
+
+  // Endereço pode ter sido salvo como ", ," (partes vazias). Só mostra se tiver conteúdo real.
+  const enderecoLimpo = String(l.endereco || '').replace(/(^[\s,]+)|([\s,]+$)/g, '').replace(/\s*,\s*,\s*/g, ', ').trim()
 
   const formaNome: Record<string, string> = {
     dinheiro: 'DINHEIRO', pix: 'PIX', debito: 'DÉBITO',
@@ -744,9 +757,11 @@ function CupomModal({ venda, onClose }: { venda: any; onClose: () => void }) {
 
             {/* Cabeçalho */}
             <div style={{ textAlign: 'center', marginBottom: 8 }}>
-              <div style={{ fontWeight: 'bold', fontSize: 14 }}>{(loja as any)?.loja_nome || 'DEPÓSITO'}</div>
-              {(loja as any)?.loja_endereco && <div style={{ fontSize: 10 }}>{(loja as any).loja_endereco}</div>}
-              {(loja as any)?.loja_telefone && <div style={{ fontSize: 10 }}>Tel: {(loja as any).loja_telefone}</div>}
+              <div style={{ fontWeight: 'bold', fontSize: 14 }}>{l.nome || 'DEPÓSITO'}</div>
+              {enderecoLimpo && <div style={{ fontSize: 10 }}>{enderecoLimpo}</div>}
+              {l.cnpj && <div style={{ fontSize: 10 }}>CNPJ: {l.cnpj}</div>}
+              {l.telefone && <div style={{ fontSize: 10 }}>Tel: {l.telefone}</div>}
+              <div style={{ fontSize: 9, fontWeight: 'bold', marginTop: 4 }}>*** NÃO É DOCUMENTO FISCAL ***</div>
               <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
               <div style={{ fontSize: 11 }}>Venda #{String(venda.numero || '').padStart(6, '0')}</div>
               <div style={{ fontSize: 10 }}>{dataStr} {horaStr}</div>
@@ -822,7 +837,7 @@ function CupomModal({ venda, onClose }: { venda: any; onClose: () => void }) {
             {/* Rodapé */}
             <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
             <div style={{ textAlign: 'center', fontSize: 10, color: '#555' }}>
-              <div>Obrigado pela preferência!</div>
+              <div>{rodape}</div>
               <div>Volte sempre 🍺</div>
             </div>
           </div>
