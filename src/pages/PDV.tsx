@@ -720,11 +720,21 @@ function CupomModal({ venda, onClose }: { venda: any; onClose: () => void }) {
 
   return (
     <>
-      {/* Estilo de impressão: esconde tudo exceto o cupom */}
+      {/* Estilo de impressão: esconde tudo exceto o cupom.
+          Usa visibility (não 'display:none' nos pais) para o cupom aninhado
+          não sumir junto — senão o PDF/impressão sai em branco. */}
       <style>{`
         @media print {
-          body > * { display: none !important; }
-          #cupom-print-root { display: block !important; position: fixed; top: 0; left: 0; }
+          body * { visibility: hidden !important; }
+          #cupom-print-root, #cupom-print-root * { visibility: visible !important; }
+          #cupom-print-root {
+            position: fixed !important;
+            left: 0 !important;
+            top: 0 !important;
+            margin: 0 !important;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+          }
         }
       `}</style>
 
