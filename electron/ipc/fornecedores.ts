@@ -70,10 +70,31 @@ export function registerFornecedorHandlers() {
   ipcMain.handle('compras:create', (_, data: any) => {
     const db = getDb()
     const tx = db.transaction(() => {
+      // Resolve o fornecedor: usa o informado ou cria/vincula pelo CNPJ do emitente (import XML)
+      let fornecedorId: number | null = data.fornecedor_id || null
+      const emit = data.emitente
+      if (!fornecedorId && emit && (emit.cnpj || emit.nome)) {
+        const cnpjLimpo = emit.cnpj ? String(emit.cnpj).replace(/\D/g, '') : null
+        let existente: any = null
+        if (cnpjLimpo) {
+          existente = db.prepare("SELECT id FROM fornecedores WHERE REPLACE(REPLACE(REPLACE(COALESCE(cnpj,''),'.',''),'/',''),'-','') = ?").get(cnpjLimpo)
+        }
+        if (!existente && emit.nome) {
+          existente = db.prepare('SELECT id FROM fornecedores WHERE nome = ?').get(emit.nome)
+        }
+        if (existente?.id) {
+          fornecedorId = existente.id
+        } else {
+          const novo = db.prepare('INSERT INTO fornecedores (nome, cnpj) VALUES (?, ?)')
+            .run(emit.nome || 'Fornecedor (NF-e)', emit.cnpj || null)
+          fornecedorId = novo.lastInsertRowid as number
+        }
+      }
+
       const result = db.prepare(`
         INSERT INTO compras (fornecedor_id, numero_nf, data_compra, total, observacoes)
         VALUES (?, ?, ?, ?, ?)
-      `).run(data.fornecedor_id || null, data.numero_nf || null, data.data_compra || new Date().toISOString().split('T')[0], data.total || 0, data.observacoes || null)
+      `).run(fornecedorId, data.numero_nf || null, data.data_compra || new Date().toISOString().split('T')[0], data.total || 0, data.observacoes || null)
 
       const compraId = result.lastInsertRowid as number
 

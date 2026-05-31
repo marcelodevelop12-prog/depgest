@@ -138,19 +138,24 @@ export default function Compras() {
     if (!window.api || !xmlData) return
     try {
       // Mapeia itens do formato XML para o formato do create
+      const itensMapeados = (xmlData.itens || []).map((it: any) => ({
+        produto_id: it.produto_id || null,
+        produto_unidade_id: it.produto_unidade_id || null,
+        descricao: it.descricao || it.nome || '—',
+        quantidade: it.quantidade || 0,
+        preco_unitario: it.preco_unitario || 0,
+        total: it.total || 0,
+      }))
+      const somaItens = itensMapeados.reduce((acc: number, it: any) => acc + (Number(it.total) || 0), 0)
       const payload = {
         fornecedor_id: xmlData.fornecedor_id || null,
+        // Permite o backend criar/vincular o fornecedor pelo CNPJ do emitente
+        emitente: xmlData.emitente || null,
         numero_nf: xmlData.numero_nf ? String(xmlData.numero_nf) : null,
-        total: xmlData.total || 0,
-        observacoes: xmlData.emitente?.xNome || xmlData.emitente?.nome || null,
-        itens: (xmlData.itens || []).map((it: any) => ({
-          produto_id: it.produto_id || null,
-          produto_unidade_id: it.produto_unidade_id || null,
-          descricao: it.descricao || it.nome || '—',
-          quantidade: it.quantidade || 0,
-          preco_unitario: it.preco_unitario || 0,
-          total: it.total || 0,
-        })),
+        // Usa o total da NF; se vier 0, cai na soma dos itens
+        total: Number(xmlData.total) > 0 ? Number(xmlData.total) : somaItens,
+        observacoes: xmlData.emitente?.nome || xmlData.emitente?.xNome || null,
+        itens: itensMapeados,
       }
       await window.api.compras.create(payload)
       toast.success('Compra importada com sucesso!')
@@ -206,8 +211,8 @@ export default function Compras() {
                 const cfg = STATUS_CONFIG[c.status]
                 return (
                   <tr key={c.id} className="border-b hover:opacity-80" style={{ borderColor: 'var(--border)' }}>
-                    <td className="py-3 px-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{c.nota_fiscal}</td>
-                    <td className="py-3 px-2 font-medium" style={{ color: 'var(--text-primary)' }}>{c.fornecedor_nome}</td>
+                    <td className="py-3 px-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{c.numero_nf || c.nota_fiscal || '—'}</td>
+                    <td className="py-3 px-2 font-medium" style={{ color: 'var(--text-primary)' }}>{c.fornecedor_nome || '—'}</td>
                     <td className="py-3 px-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{formatDate(c.data_compra || c.created_at)}</td>
                     <td className="py-3 px-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{c.total_itens ?? (Array.isArray(c.itens) ? c.itens.length : 0)} item(ns)</td>
                     <td className="py-3 px-2 font-bold" style={{ color: '#F5A623' }}>{formatCurrency(c.total)}</td>
@@ -314,7 +319,7 @@ export default function Compras() {
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="w-full max-w-lg rounded-xl shadow-2xl" style={{ background: 'var(--card)' }}>
             <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--border)' }}>
-              <h2 className="font-bold" style={{ color: 'var(--text-primary)' }}>Detalhes — {detailCompra.nota_fiscal}</h2>
+              <h2 className="font-bold" style={{ color: 'var(--text-primary)' }}>Detalhes — {detailCompra.numero_nf || detailCompra.nota_fiscal || 'Sem NF'}</h2>
               <button onClick={() => setDetailCompra(null)}><X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} /></button>
             </div>
             <div className="p-4 space-y-3">
