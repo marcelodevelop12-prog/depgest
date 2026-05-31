@@ -382,7 +382,7 @@ export default function Cardapio() {
                     }
                   }}
                   className="px-3 py-1 rounded-lg text-xs font-medium"
-                  style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                  style={{ background: '#F5A62322', border: '1px solid #F5A62366', color: '#F5A623' }}
                 >
                   {selecionados.size === produtos.length ? 'Desmarcar tudo' : 'Selecionar tudo'}
                 </button>
