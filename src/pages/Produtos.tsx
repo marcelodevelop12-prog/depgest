@@ -44,7 +44,7 @@ const MOCK_PRODUTOS: Produto[] = [
 ]
 
 const EMPTY_FORM = {
-  nome: '', marca: '', ean: '', categoria_id: 0, estoque_minimo: 1, localizacao: '', controle_validade: false, ativo: true,
+  nome: '', marca: '', ean: '', categoria_id: 0, estoque_minimo: 1, localizacao: '', descricao: '', controle_validade: false, ativo: true,
 }
 const EMPTY_UNIDADE: Unidade = { tipo: 'unidade', quantidade_base: 1, preco_custo: 0, preco_venda: 0 }
 
@@ -105,7 +105,7 @@ export default function Produtos() {
 
   async function openEdit(p: Produto) {
     setEditProduto(p)
-    setForm({ nome: p.nome ?? '', marca: p.marca ?? '', ean: p.ean ?? '', categoria_id: p.categoria_id, estoque_minimo: p.estoque_minimo ?? 0, localizacao: p.localizacao ?? '', controle_validade: p.controle_validade, ativo: p.ativo })
+    setForm({ nome: p.nome ?? '', marca: p.marca ?? '', ean: p.ean ?? '', categoria_id: p.categoria_id, estoque_minimo: p.estoque_minimo ?? 0, localizacao: p.localizacao ?? '', descricao: p.descricao ?? '', controle_validade: p.controle_validade, ativo: p.ativo })
     // Carrega unidades reais do produto (lista não inclui unidades)
     if (window.api) {
       try {
@@ -463,6 +463,19 @@ export default function Produtos() {
                   <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>Localização</label>
                   <input className="w-full px-3 py-2 rounded-lg text-sm outline-none" style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
                     value={form.localizacao} onChange={e => setForm(f => ({ ...f, localizacao: e.target.value }))} />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium mb-1" style={{ color: 'var(--text-secondary)' }}>
+                    Descrição <span className="font-normal" style={{ color: 'var(--text-secondary)', opacity: 0.6 }}>(aparece no cardápio online)</span>
+                  </label>
+                  <textarea
+                    rows={3}
+                    className="w-full px-3 py-2 rounded-lg text-sm outline-none resize-none"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                    placeholder="Ex: Cerveja gelada 600ml, encorpada e refrescante..."
+                    value={form.descricao ?? ''}
+                    onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                  />
                 </div>
                 <div className="flex items-center gap-3">
                   <label className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Controle de Validade</label>
