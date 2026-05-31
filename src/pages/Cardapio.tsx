@@ -369,9 +369,24 @@ export default function Cardapio() {
         {aba === 'produtos' && (
           <div>
             <div className="flex items-center justify-between mb-4">
-              <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
-                Selecione quais produtos aparecem no cardápio online
-              </p>
+              <div className="flex items-center gap-3">
+                <p className="text-sm" style={{ color: 'var(--text-secondary)' }}>
+                  Selecione quais produtos aparecem no cardápio online
+                </p>
+                <button
+                  onClick={() => {
+                    if (selecionados.size === produtos.length) {
+                      setSelecionados(new Set())
+                    } else {
+                      setSelecionados(new Set(produtos.map(p => p.id)))
+                    }
+                  }}
+                  className="px-3 py-1 rounded-lg text-xs font-medium"
+                  style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}
+                >
+                  {selecionados.size === produtos.length ? 'Desmarcar tudo' : 'Selecionar tudo'}
+                </button>
+              </div>
               <button onClick={sincronizar} disabled={syncing || selecionados.size === 0}
                 className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium disabled:opacity-50"
                 style={{ background: '#3B82F6', color: '#fff' }}>
