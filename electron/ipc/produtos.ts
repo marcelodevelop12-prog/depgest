@@ -11,7 +11,7 @@ export function registerProdutoHandlers() {
   ipcMain.handle('produtos:list', (_, filters: any = {}) => {
     const db = getDb()
     let sql = `
-      SELECT p.*, c.nome as categoria_nome,
+      SELECT p.*, c.nome as categoria, c.nome as categoria_nome,
         (SELECT SUM(em.quantidade * CASE WHEN em.tipo = 'entrada' THEN 1
                                          WHEN em.tipo = 'saida' THEN -1
                                          ELSE 1 END)
