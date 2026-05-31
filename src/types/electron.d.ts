@@ -39,6 +39,7 @@ export interface ElectronAPI {
     update: (id: number, data: any) => Promise<boolean>
     delete: (id: number) => Promise<boolean>
     importXml: (xmlPath: string) => Promise<any>
+    confirmarImport: (items: any[]) => Promise<{ ok: boolean; importados: number; atualizados: number }>
     consultaEan: (ean: string) => Promise<any>
     listUnidades: (produtoId: number) => Promise<any[]>
     saveUnidades: (produtoId: number, unidades: any[]) => Promise<boolean>

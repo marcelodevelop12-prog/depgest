@@ -50,6 +50,7 @@ const api = {
     update: (id: number, data: Record<string, unknown>) => ipcRenderer.invoke('produtos:update', id, data),
     delete: (id: number) => ipcRenderer.invoke('produtos:delete', id),
     importXml: (xmlPath: string) => ipcRenderer.invoke('produtos:import-xml', xmlPath),
+    confirmarImport: (items: unknown[]) => ipcRenderer.invoke('produtos:confirmar-import', items),
     consultaEan: (ean: string) => ipcRenderer.invoke('produtos:consulta-ean', ean),
     listUnidades: (produtoId: number) => ipcRenderer.invoke('produtos:list-unidades', produtoId),
     saveUnidades: (produtoId: number, unidades: unknown[]) => ipcRenderer.invoke('produtos:save-unidades', produtoId, unidades),

@@ -179,13 +179,77 @@ export function registerProdutoHandlers() {
       preview.push({
         nome: prod.xProd,
         ean,
-        quantidade: parseFloat(prod.qCom),
-        preco_unitario: parseFloat(prod.vUnCom),
+        marca: prod.marca || null,
+        categoria: prod.categoria || null,
+        quantidade: parseFloat(prod.qCom) || 0,
+        preco_custo: parseFloat(prod.vCusto) || 0,
+        preco_unitario: parseFloat(prod.vUnCom) || 0,
+        estoque_inicial: parseFloat(prod.estoqueInicial) || 0,
         existente: existente || null,
       })
     }
 
     return { ok: true, preview, emitente: nfe.emit }
+  })
+
+  ipcMain.handle('produtos:confirmar-import', (_, items: any[]) => {
+    const db = getDb()
+
+    const getCat    = db.prepare("SELECT id FROM categorias WHERE nome = ? COLLATE NOCASE")
+    const insertCat = db.prepare("INSERT INTO categorias (nome, ordem) VALUES (?, (SELECT COALESCE(MAX(ordem),0)+1 FROM categorias))")
+    const insertProd = db.prepare(`INSERT INTO produtos (nome, marca, ean, categoria_id) VALUES (?, ?, ?, ?)`)
+    const updateProd = db.prepare(`UPDATE produtos SET nome=?, marca=?, categoria_id=? WHERE id=?`)
+    const insertUni  = db.prepare(`INSERT INTO produto_unidades (produto_id, tipo, quantidade_base, preco_custo, preco_venda, ativo) VALUES (?, 'unidade', 1, ?, ?, 1)`)
+    const updateUni  = db.prepare(`UPDATE produto_unidades SET preco_custo=?, preco_venda=? WHERE id=?`)
+    const getSaldo   = db.prepare(`SELECT COALESCE(SUM(quantidade * CASE WHEN tipo='entrada' THEN 1 WHEN tipo='saida' THEN -1 ELSE 1 END),0) as s FROM estoque_movimentacoes WHERE produto_id=?`)
+    const insertMov  = db.prepare(`INSERT INTO estoque_movimentacoes (produto_id, produto_unidade_id, tipo, quantidade, saldo_anterior, saldo_posterior, motivo) VALUES (?, ?, 'entrada', ?, ?, ?, 'Importação XML')`)
+
+    let importados = 0
+    let atualizados = 0
+
+    const tx = db.transaction(() => {
+      for (const item of items) {
+        // Categoria
+        let categoriaId: number | null = null
+        if (item.categoria) {
+          const cat = getCat.get(item.categoria) as any
+          if (cat) {
+            categoriaId = cat.id
+          } else {
+            categoriaId = Number(insertCat.run(item.categoria).lastInsertRowid)
+          }
+        }
+
+        let produtoId: number
+        if (item.existente) {
+          updateProd.run(item.nome, item.marca, categoriaId, item.existente.id)
+          produtoId = item.existente.id
+          atualizados++
+        } else {
+          produtoId = Number(insertProd.run(item.nome, item.marca, item.ean, categoriaId).lastInsertRowid)
+          importados++
+        }
+
+        // Unidade
+        const existeUni = db.prepare("SELECT id FROM produto_unidades WHERE produto_id=? AND tipo='unidade'").get(produtoId) as any
+        let unidadeId: number
+        if (existeUni) {
+          updateUni.run(item.preco_custo || 0, item.preco_unitario || 0, existeUni.id)
+          unidadeId = existeUni.id
+        } else {
+          unidadeId = Number(insertUni.run(produtoId, item.preco_custo || 0, item.preco_unitario || 0).lastInsertRowid)
+        }
+
+        // Estoque inicial
+        if (item.estoque_inicial > 0) {
+          const saldoAnterior = Number((getSaldo.get(produtoId) as any).s)
+          insertMov.run(produtoId, unidadeId, item.estoque_inicial, saldoAnterior, saldoAnterior + item.estoque_inicial)
+        }
+      }
+    })
+
+    tx()
+    return { ok: true, importados, atualizados }
   })
 
   ipcMain.handle('produtos:consulta-ean', async (_, ean: string) => {

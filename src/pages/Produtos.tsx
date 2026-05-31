@@ -625,7 +625,19 @@ export default function Produtos() {
               </table>
               <div className="flex justify-end gap-3 mt-4">
                 <button onClick={() => setXmlModalOpen(false)} className="px-4 py-2 rounded-lg text-sm" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Cancelar</button>
-                <button onClick={() => { toast.success('Produtos importados!'); setXmlModalOpen(false) }} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>Confirmar Importação</button>
+                <button onClick={async () => {
+                  if (!window.api) { toast.success('Produtos importados!'); setXmlModalOpen(false); return }
+                  try {
+                    const result = await window.api.produtos.confirmarImport(xmlItems)
+                    if (result?.ok) {
+                      toast.success(`${result.importados} produto(s) importado(s), ${result.atualizados} atualizado(s)`)
+                      setXmlModalOpen(false)
+                      load()
+                    } else {
+                      toast.error('Erro ao salvar produtos')
+                    }
+                  } catch { toast.error('Erro ao confirmar importação') }
+                }} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>Confirmar Importação</button>
               </div>
             </div>
           </div>
