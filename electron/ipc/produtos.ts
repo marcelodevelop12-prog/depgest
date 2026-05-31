@@ -160,7 +160,7 @@ export function registerProdutoHandlers() {
   ipcMain.handle('produtos:import-xml', async (_, xmlPath: string) => {
     const db = getDb()
     const xmlContent = fs.readFileSync(xmlPath, 'utf-8')
-    const parser = new XMLParser({ ignoreAttributes: false })
+    const parser = new XMLParser({ ignoreAttributes: false, parseTagValue: false, parseAttributeValue: false })
     const parsed = parser.parse(xmlContent)
 
     const nfe = parsed?.nfeProc?.NFe?.infNFe || parsed?.NFe?.infNFe
@@ -171,7 +171,8 @@ export function registerProdutoHandlers() {
 
     for (const item of det) {
       const prod = item.prod
-      const ean = prod.cEAN !== 'SEM GTIN' ? prod.cEAN : null
+      const eanRaw = String(prod.cEAN ?? '').trim()
+      const ean = eanRaw && eanRaw !== 'SEM GTIN' ? eanRaw : null
       const existente = ean
         ? db.prepare('SELECT * FROM produtos WHERE ean = ?').get(ean)
         : db.prepare('SELECT * FROM produtos WHERE nome LIKE ?').get(`%${prod.xProd}%`)

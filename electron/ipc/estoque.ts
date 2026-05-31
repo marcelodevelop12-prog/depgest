@@ -9,20 +9,22 @@ export function registerEstoqueHandlers() {
         SELECT produto_id,
           SUM(CASE WHEN tipo = 'entrada' THEN quantidade
                    WHEN tipo = 'saida' THEN -quantidade
-                   ELSE quantidade END) as saldo
+                   ELSE quantidade END) as estoque_atual
         FROM estoque_movimentacoes
         WHERE produto_id = ?
         GROUP BY produto_id
       `).get(produtoId) as any
-      return row?.saldo ?? 0
+      return row?.estoque_atual ?? 0
     }
 
     return db.prepare(`
       SELECT p.id, p.nome, p.estoque_minimo,
+        COALESCE(c.nome, '') as categoria,
         COALESCE(SUM(CASE WHEN em.tipo = 'entrada' THEN em.quantidade
                           WHEN em.tipo = 'saida' THEN -em.quantidade
-                          ELSE em.quantidade END), 0) as saldo
+                          ELSE em.quantidade END), 0) as estoque_atual
       FROM produtos p
+      LEFT JOIN categorias c ON c.id = p.categoria_id
       LEFT JOIN estoque_movimentacoes em ON em.produto_id = p.id
       WHERE p.ativo = 1
       GROUP BY p.id
