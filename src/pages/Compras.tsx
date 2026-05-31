@@ -17,7 +17,8 @@ interface Compra {
   total: number
   nota_fiscal?: string
   numero_nf?: string
-  itens: ItemCompra[]
+  total_itens?: number
+  itens?: ItemCompra[]
 }
 
 const MOCK_FORNECEDORES: Fornecedor[] = [
@@ -208,7 +209,7 @@ export default function Compras() {
                     <td className="py-3 px-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{c.nota_fiscal}</td>
                     <td className="py-3 px-2 font-medium" style={{ color: 'var(--text-primary)' }}>{c.fornecedor_nome}</td>
                     <td className="py-3 px-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{formatDate(c.data_compra || c.created_at)}</td>
-                    <td className="py-3 px-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{c.itens.length} item(ns)</td>
+                    <td className="py-3 px-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{c.total_itens ?? (Array.isArray(c.itens) ? c.itens.length : 0)} item(ns)</td>
                     <td className="py-3 px-2 font-bold" style={{ color: '#F5A623' }}>{formatCurrency(c.total)}</td>
                     <td className="py-3 px-2">
                       <span className="px-2 py-1 rounded-full text-xs font-medium" style={{ background: cfg.bg, color: cfg.color }}>{cfg.label}</span>
@@ -326,7 +327,7 @@ export default function Compras() {
                   {['Produto', 'Qtd', 'Preço Unit.', 'Subtotal'].map(h => <th key={h} className="pb-2 text-left px-2 font-semibold text-xs" style={{ color: 'var(--text-secondary)' }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
-                  {detailCompra.itens.map((it, i) => (
+                  {(detailCompra.itens || []).map((it, i) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
                       <td className="py-2 px-2 text-xs" style={{ color: 'var(--text-primary)' }}>{it.produto_nome}</td>
                       <td className="py-2 px-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{it.quantidade}</td>
