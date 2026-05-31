@@ -39,6 +39,12 @@ const STATUS_CONFIG: Record<string, { color: string; bg: string; icon: any }> = 
   cancelado: { color: '#EF4444', bg: '#EF444422', icon: XCircle },
 }
 const STATUS_FALLBACK = { color: '#6B7280', bg: '#6B728022', icon: Clock }
+
+// Venda de balcão concluída aparece como "Concluído" (não "Entregue", que é de delivery)
+function labelPedido(status: string, origem?: string) {
+  if (origem === 'balcao' && status === 'entregue') return 'Concluído'
+  return statusLabel(status)
+}
 const ALL_STATUS = ['novo', 'separando', 'a_caminho', 'entregue', 'cancelado'] as const
 type StatusType = typeof ALL_STATUS[number]
 
@@ -47,6 +53,7 @@ export default function Pedidos() {
   const [motoboys, setMotoboys] = useState<Motoboy[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<StatusType | 'todos'>('todos')
+  const [origemFilter, setOrigemFilter] = useState<'todos' | 'online' | 'balcao'>('online')
   const [cancelModal, setCancelModal] = useState<Pedido | null>(null)
   const [cancelMotivo, setCancelMotivo] = useState('')
   const [motoboyModal, setMotoboyModal] = useState<Pedido | null>(null)
@@ -62,8 +69,10 @@ export default function Pedidos() {
       const p = rawPedidos.map((r: any) => ({
         ...r,
         itens: (() => {
-          const arr = typeof r.itens === 'string' ? JSON.parse(r.itens) : (r.itens ?? [])
-          return Array.isArray(arr) ? arr.filter((i: any) => i.nome != null) : []
+          try {
+            const arr = typeof r.itens === 'string' ? JSON.parse(r.itens) : (r.itens ?? [])
+            return Array.isArray(arr) ? arr.filter((i: any) => i.nome != null) : []
+          } catch { return [] }
         })(),
       }))
       setPedidos(p)
@@ -132,8 +141,9 @@ export default function Pedidos() {
     window.open(whatsappUrl(p.cliente_telefone, msg), '_blank')
   }
 
-  const counts = ALL_STATUS.reduce((acc, s) => ({ ...acc, [s]: pedidos.filter(p => p.status === s).length }), {} as Record<string, number>)
-  const filtered = statusFilter === 'todos' ? pedidos : pedidos.filter(p => p.status === statusFilter)
+  const porOrigem = origemFilter === 'todos' ? pedidos : pedidos.filter(p => p.origem === origemFilter)
+  const counts = ALL_STATUS.reduce((acc, s) => ({ ...acc, [s]: porOrigem.filter(p => p.status === s).length }), {} as Record<string, number>)
+  const filtered = statusFilter === 'todos' ? porOrigem : porOrigem.filter(p => p.status === statusFilter)
 
   return (
     <div className="flex flex-col h-full">
@@ -144,6 +154,23 @@ export default function Pedidos() {
           <Wifi className="w-3 h-3" /> Ao vivo
         </div>
         <div className="flex-1" />
+        {/* Filtro de origem: delivery (online) x balcão */}
+        <div className="flex items-center rounded-lg overflow-hidden" style={{ border: '1px solid var(--border)' }}>
+          {([
+            { key: 'online', label: 'Online', color: '#3B82F6' },
+            { key: 'balcao', label: 'Balcão', color: '#6B7280' },
+            { key: 'todos', label: 'Todos', color: '#F5A623' },
+          ] as const).map(o => (
+            <button key={o.key} onClick={() => { setOrigemFilter(o.key); setStatusFilter('todos') }}
+              className="px-3 py-1.5 text-xs font-medium transition-colors"
+              style={{
+                background: origemFilter === o.key ? o.color : 'transparent',
+                color: origemFilter === o.key ? '#fff' : 'var(--text-secondary)',
+              }}>
+              {o.label}
+            </button>
+          ))}
+        </div>
         <button onClick={load} className="p-2 rounded-lg" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}><RefreshCw className="w-4 h-4" /></button>
       </div>
 
@@ -152,15 +179,15 @@ export default function Pedidos() {
         <button onClick={() => setStatusFilter('todos')}
           className="flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium whitespace-nowrap border-b-2"
           style={{ borderColor: statusFilter === 'todos' ? '#F5A623' : 'transparent', color: statusFilter === 'todos' ? '#F5A623' : 'var(--text-secondary)' }}>
-          Todos <span className="px-1.5 py-0.5 rounded-full text-xs" style={{ background: 'var(--bg)' }}>{pedidos.length}</span>
+          Todos <span className="px-1.5 py-0.5 rounded-full text-xs" style={{ background: 'var(--bg)' }}>{porOrigem.length}</span>
         </button>
-        {ALL_STATUS.map(s => {
+        {ALL_STATUS.filter(s => origemFilter !== 'balcao' || s === 'entregue' || s === 'cancelado').map(s => {
           const cfg = STATUS_CONFIG[s]
           return (
             <button key={s} onClick={() => setStatusFilter(s)}
               className="flex items-center gap-2 px-4 py-2 rounded-t-lg text-sm font-medium whitespace-nowrap border-b-2"
               style={{ borderColor: statusFilter === s ? cfg.color : 'transparent', color: statusFilter === s ? cfg.color : 'var(--text-secondary)' }}>
-              {statusLabel(s)} <span className="px-1.5 py-0.5 rounded-full text-xs" style={{ background: cfg.bg, color: cfg.color }}>{counts[s]}</span>
+              {labelPedido(s, origemFilter === 'balcao' ? 'balcao' : undefined)} <span className="px-1.5 py-0.5 rounded-full text-xs" style={{ background: cfg.bg, color: cfg.color }}>{counts[s]}</span>
             </button>
           )
         })}
@@ -189,7 +216,7 @@ export default function Pedidos() {
                     <div className="flex items-center gap-2">
                       <span className="font-bold text-sm" style={{ color: 'var(--text-primary)' }}>{p.numero}</span>
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1" style={{ background: cfg.bg, color: cfg.color }}>
-                        <Icon className="w-3 h-3" /> {statusLabel(p.status)}
+                        <Icon className="w-3 h-3" /> {labelPedido(p.status, p.origem)}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -273,7 +300,7 @@ export default function Pedidos() {
                   return (
                     <span className="px-2 py-0.5 rounded-full text-xs font-medium flex items-center gap-1"
                       style={{ background: cfg.bg, color: cfg.color }}>
-                      <Icon className="w-3 h-3" /> {statusLabel(detalhe.status ?? 'novo')}
+                      <Icon className="w-3 h-3" /> {labelPedido(detalhe.status ?? 'novo', detalhe.origem)}
                     </span>
                   )
                 })()}
@@ -367,8 +394,8 @@ export default function Pedidos() {
                 </div>
               )}
 
-              {/* Rastreio */}
-              {detalhe.token_rastreio && (
+              {/* Rastreio — só para pedidos online (balcão não tem entrega) */}
+              {detalhe.token_rastreio && detalhe.origem === 'online' && (
                 <button onClick={() => window.api?.system.openExternal(gerarLinkRastreio(detalhe.token_rastreio))}
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium"
                   style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>

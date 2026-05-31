@@ -107,8 +107,13 @@ export default function Configuracoes() {
       properties: ['openFile'],
     })
     if (!result.canceled && result.filePaths[0]) {
-      const ok = await window.api.config.restore(result.filePaths[0])
-      if (ok) toast.success('Backup restaurado! Reinicie o sistema.')
+      const res = await window.api.config.restore(result.filePaths[0]) as any
+      // Em caso de sucesso o app reinicia sozinho; só chegamos aqui em erro.
+      if (res && res.ok === false) {
+        toast.error(res.error || 'Falha ao restaurar backup')
+      } else if (res === true || res?.ok) {
+        toast.success('Backup restaurado! Reiniciando...')
+      }
     }
   }
 

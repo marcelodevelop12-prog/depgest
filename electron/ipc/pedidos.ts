@@ -94,13 +94,19 @@ export function registerPedidoHandlers() {
     const numero = gerarNumero()
     const token = gerarToken()
 
+    const origem = data.origem || 'balcao'
+    // Venda de balcão já está concluída no momento do pagamento — não entra na
+    // esteira de delivery (novo → separando → a_caminho → entregue). Só pedidos
+    // online seguem o fluxo de entrega.
+    const statusInicial = origem === 'balcao' ? 'entregue' : 'novo'
+
     const tx = db.transaction(() => {
       const result = db.prepare(`
         INSERT INTO pedidos (numero, cliente_id, cliente_nome, cliente_telefone, cliente_endereco,
           origem, status, forma_pagamento, forma_pagamento2, valor_pago, valor_pago2,
           subtotal, desconto, taxa_entrega, total, troco, observacao, token_rastreio, pedido_online_id)
         VALUES (@numero, @cliente_id, @cliente_nome, @cliente_telefone, @cliente_endereco,
-          @origem, 'novo', @forma_pagamento, @forma_pagamento2, @valor_pago, @valor_pago2,
+          @origem, @status, @forma_pagamento, @forma_pagamento2, @valor_pago, @valor_pago2,
           @subtotal, @desconto, @taxa_entrega, @total, @troco, @observacao, @token, @pedido_online_id)
       `).run({
         numero, token,
@@ -108,7 +114,8 @@ export function registerPedidoHandlers() {
         cliente_nome: data.cliente_nome || null,
         cliente_telefone: data.cliente_telefone || null,
         cliente_endereco: data.cliente_endereco || null,
-        origem: data.origem || 'balcao',
+        origem,
+        status: statusInicial,
         forma_pagamento: data.forma_pagamento,
         forma_pagamento2: data.forma_pagamento2 || null,
         valor_pago: data.valor_pago || data.total,
@@ -228,6 +235,15 @@ export function registerPedidoHandlers() {
   ipcMain.handle('pedidos:aceitar-online', async (_, pedidoOnlineId: string) => {
     const db = getDb()
     console.log('[aceitar-online] iniciando, id:', pedidoOnlineId)
+
+    // Idempotência: se este pedido online já foi aceito (duplo-clique / reenvio),
+    // retorna o pedido local existente em vez de criar outro e baixar estoque 2x.
+    const jaAceito = db.prepare('SELECT id, numero FROM pedidos WHERE pedido_online_id = ?').get(pedidoOnlineId) as any
+    if (jaAceito) {
+      console.log('[aceitar-online] pedido já aceito anteriormente, id:', jaAceito.id)
+      supabase.from('pedidos_online').update({ sincronizado: true }).eq('id', pedidoOnlineId).then(() => {})
+      return { ok: true, pedido_id: jaAceito.id, numero: jaAceito.numero, jaExistia: true }
+    }
 
     try {
       // 1. Busca o pedido no Supabase

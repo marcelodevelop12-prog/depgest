@@ -10,8 +10,6 @@ export interface ElectronAPI {
     getUserDataPath: () => Promise<string>
     openDialog: (options: any) => Promise<any>
     saveDialog: (options: any) => Promise<any>
-    readFile: (filePath: string) => Promise<Buffer>
-    writeFile: (filePath: string, data: any) => Promise<boolean>
     openExternal: (url: string) => Promise<void>
     checkUpdate: () => Promise<any>
     onUpdateAvailable: (cb: () => void) => void
@@ -30,13 +28,13 @@ export interface ElectronAPI {
     getLoja: () => Promise<any>
     uploadLogo: (filePath: string) => Promise<string>
     backup: (destPath: string) => Promise<boolean>
-    restore: (srcPath: string) => Promise<boolean>
+    restore: (srcPath: string) => Promise<boolean | { ok: boolean; error?: string }>
   }
   produtos: {
     list: (filters?: any) => Promise<any[]>
     get: (id: number) => Promise<any>
     create: (data: any) => Promise<{ id: number }>
-    update: (id: number, data: any) => Promise<boolean>
+    update: (id: number, data: any) => Promise<{ ok: boolean; error?: string } | boolean>
     delete: (id: number) => Promise<boolean>
     importXml: (xmlPath: string) => Promise<any>
     confirmarImport: (items: any[]) => Promise<{ ok: boolean; importados: number; atualizados: number }>

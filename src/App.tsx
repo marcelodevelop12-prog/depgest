@@ -41,6 +41,38 @@ import Configuracoes from './pages/Configuracoes'
 
 type AppStatus = 'loading' | 'sem-licenca' | 'onboarding' | 'app'
 
+function UpdateBanner() {
+  const [show, setShow] = useState(false)
+  const [installing, setInstalling] = useState(false)
+
+  useEffect(() => {
+    if (!window.api) return
+    window.api.system.onUpdateDownloaded(() => setShow(true))
+  }, [])
+
+  if (!show) return null
+
+  return (
+    <div className="fixed bottom-0 left-0 right-0 z-[9999] flex items-center justify-between gap-4 px-6 py-3"
+      style={{ background: '#1a3a1a', borderTop: '2px solid #22C55E' }}>
+      <div className="flex items-center gap-3">
+        <span style={{ fontSize: 20 }}>🎉</span>
+        <div>
+          <p className="text-sm font-semibold" style={{ color: '#22C55E' }}>Atualização pronta para instalar!</p>
+          <p className="text-xs" style={{ color: '#86efac' }}>Uma nova versão do DepGest foi baixada. Reinicie para aplicar.</p>
+        </div>
+      </div>
+      <button
+        onClick={() => { setInstalling(true); window.api?.system.installUpdate() }}
+        disabled={installing}
+        className="flex-shrink-0 px-5 py-2 rounded-xl text-sm font-bold disabled:opacity-60"
+        style={{ background: '#22C55E', color: '#000' }}>
+        {installing ? 'Reiniciando...' : '⟳ Reiniciar e atualizar'}
+      </button>
+    </div>
+  )
+}
+
 export default function App() {
   const [status, setStatus] = useState<AppStatus>('loading')
   const { setTema, setLicenca, setLoja } = useAppStore()
@@ -114,6 +146,7 @@ export default function App() {
 
   return (
     <HashRouter>
+      <UpdateBanner />
       <Layout>
         <ErrorBoundary>
         <Routes>

@@ -3,10 +3,12 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   LayoutDashboard, ShoppingCart, Package, PackageSearch, Users, Truck,
   Store, ShoppingBag, Wallet, BarChart3, Globe, Settings, ChevronLeft,
-  ChevronRight, Minus, Maximize2, X, Bell, Box
+  ChevronRight, Minus, Maximize2, X, Bell, Box, RefreshCw, Download, CheckCircle
 } from 'lucide-react'
 import { useAppStore } from '../store/app'
 import { cn } from '../lib/utils'
+
+type UpdateStatus = 'idle' | 'checking' | 'downloading' | 'ready'
 
 const NAV = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -33,13 +35,30 @@ export default function Layout({ children }: Props) {
   const { loja, alertas } = useAppStore()
   const [collapsed, setCollapsed] = useState(false)
   const [isMaximized, setIsMaximized] = useState(false)
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle')
 
   const isElectron = !!window.api
 
   useEffect(() => {
     if (!isElectron) return
     window.api.window.isMaximized().then(setIsMaximized)
+    window.api.system.onUpdateAvailable(() => setUpdateStatus('downloading'))
+    window.api.system.onUpdateDownloaded(() => setUpdateStatus('ready'))
   }, [isElectron])
+
+  async function verificarAtualizacao() {
+    if (!window.api) return
+    if (updateStatus === 'ready') { window.api.system.installUpdate(); return }
+    if (updateStatus !== 'idle') return
+    setUpdateStatus('checking')
+    try {
+      await window.api.system.checkUpdate()
+      // Se não disparou onUpdateAvailable após 5s, volta ao idle
+      setTimeout(() => setUpdateStatus(s => s === 'checking' ? 'idle' : s), 6000)
+    } catch {
+      setUpdateStatus('idle')
+    }
+  }
 
   function navTo(path: string) {
     navigate(path)
@@ -100,7 +119,7 @@ export default function Layout({ children }: Props) {
             background: 'var(--sidebar)',
             borderRight: '1px solid var(--border)',
           }}>
-          <div className="flex-1 py-2 overflow-y-auto scroll-area">
+          <div className="flex-1 min-h-0 py-2 overflow-y-auto scroll-area">
             {NAV.map(item => {
               const Icon = item.icon
               const active = location.pathname === item.path
@@ -137,6 +156,39 @@ export default function Layout({ children }: Props) {
               )
             })}
           </div>
+
+          {/* Botão de atualização */}
+          {isElectron && (
+            <button
+              onClick={verificarAtualizacao}
+              title={
+                updateStatus === 'idle' ? 'Verificar atualização' :
+                updateStatus === 'checking' ? 'Verificando...' :
+                updateStatus === 'downloading' ? 'Baixando atualização...' :
+                'Reiniciar e atualizar'
+              }
+              className="w-full flex items-center gap-2 px-3 py-2.5 transition-colors"
+              style={{
+                borderTop: '1px solid var(--border)',
+                color: updateStatus === 'ready' ? '#22C55E' :
+                       updateStatus === 'downloading' ? '#F5A623' :
+                       'var(--text-secondary)',
+                background: updateStatus === 'ready' ? '#22C55E12' : 'transparent',
+              }}>
+              {updateStatus === 'idle' && <RefreshCw size={15} />}
+              {updateStatus === 'checking' && <RefreshCw size={15} className="animate-spin" />}
+              {updateStatus === 'downloading' && <Download size={15} className="animate-bounce" />}
+              {updateStatus === 'ready' && <CheckCircle size={15} />}
+              {!collapsed && (
+                <span className="text-xs font-medium truncate">
+                  {updateStatus === 'idle' && 'Verificar atualização'}
+                  {updateStatus === 'checking' && 'Verificando...'}
+                  {updateStatus === 'downloading' && 'Baixando...'}
+                  {updateStatus === 'ready' && 'Reiniciar e atualizar'}
+                </span>
+              )}
+            </button>
+          )}
 
           {/* Collapse toggle */}
           <button

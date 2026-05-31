@@ -15,8 +15,6 @@ const api = {
     getUserDataPath: () => ipcRenderer.invoke('system:get-user-data-path'),
     openDialog: (options: Electron.OpenDialogOptions) => ipcRenderer.invoke('system:open-dialog', options),
     saveDialog: (options: Electron.SaveDialogOptions) => ipcRenderer.invoke('system:save-dialog', options),
-    readFile: (filePath: string) => ipcRenderer.invoke('system:read-file', filePath),
-    writeFile: (filePath: string, data: Buffer | string) => ipcRenderer.invoke('system:write-file', filePath, data),
     openExternal: (url: string) => ipcRenderer.invoke('system:open-external', url),
     checkUpdate: () => ipcRenderer.invoke('system:check-update'),
     onUpdateAvailable: (cb: () => void) => ipcRenderer.on('update:available', cb),

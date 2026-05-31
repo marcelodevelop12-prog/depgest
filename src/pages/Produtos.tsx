@@ -18,6 +18,7 @@ interface Produto {
   ean: string
   categoria_id: number
   categoria?: string
+  descricao?: string
   estoque_atual: number
   estoque_minimo: number
   localizacao: string
@@ -136,7 +137,7 @@ export default function Produtos() {
         return
       }
       if (editProduto) {
-        const res = await window.api.produtos.update(editProduto.id, payload)
+        const res = await window.api.produtos.update(editProduto.id, payload) as any
         if (res && !res.ok) { toast.error('Erro: ' + res.error); return }
         toast.success('Produto atualizado')
       } else {

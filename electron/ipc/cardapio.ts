@@ -1,6 +1,8 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
 import { supabaseAdmin as supabase } from '../lib/supabase'
+import fs from 'fs'
+import path from 'path'
 
 export function registerCardapioHandlers() {
   ipcMain.handle('cardapio:get-produtos', () => {
@@ -131,6 +133,66 @@ export function registerCardapioHandlers() {
     }
 
     return { ok: true, synced: produtos.length }
+  })
+
+  ipcMain.handle('cardapio:get-fotos', async () => {
+    const db = getDb()
+    const licenca = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
+    if (!licenca?.supabase_loja_id) return {}
+
+    const { data } = await supabase
+      .from('cardapio_produtos')
+      .select('produto_local_id, foto_url')
+      .eq('loja_id', licenca.supabase_loja_id)
+      .not('foto_url', 'is', null)
+
+    if (!data) return {}
+    return Object.fromEntries(data.map((r: any) => [r.produto_local_id, r.foto_url]))
+  })
+
+  ipcMain.handle('cardapio:upload-foto', async (_, produtoLocalIdStr: string, filePath: string) => {
+    const db = getDb()
+    const licenca = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
+    if (!licenca?.supabase_loja_id) return { ok: false, erro: 'Loja não configurada na nuvem' }
+
+    const lojaId = licenca.supabase_loja_id
+    const produtoLocalId = parseInt(produtoLocalIdStr)
+
+    // Lê o arquivo de imagem
+    if (!fs.existsSync(filePath)) return { ok: false, erro: 'Arquivo não encontrado' }
+    const fileBuffer = fs.readFileSync(filePath)
+    const ext = path.extname(filePath).toLowerCase().replace('.', '') || 'jpg'
+    const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg'
+    const fileName = `${lojaId}/${produtoLocalId}_${Date.now()}.${ext}`
+
+    // Upload para Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from('cardapio-fotos')
+      .upload(fileName, fileBuffer, { contentType: mimeType, upsert: true })
+
+    if (uploadError) return { ok: false, erro: uploadError.message }
+
+    // URL pública
+    const { data: urlData } = supabase.storage.from('cardapio-fotos').getPublicUrl(fileName)
+    const fotoUrl = urlData.publicUrl
+
+    // Salva foto_path local no SQLite
+    db.prepare('UPDATE produtos SET foto_path = ?, updated_at = datetime(\'now\') WHERE id = ?')
+      .run(filePath, produtoLocalId)
+
+    // Atualiza foto_url no cardapio_produtos (se o produto já foi sincronizado)
+    const { data: ex } = await supabase
+      .from('cardapio_produtos')
+      .select('id')
+      .eq('loja_id', lojaId)
+      .eq('produto_local_id', produtoLocalId)
+      .maybeSingle()
+
+    if (ex) {
+      await supabase.from('cardapio_produtos').update({ foto_url: fotoUrl }).eq('id', ex.id)
+    }
+
+    return { ok: true, foto_url: fotoUrl, foto_path: filePath }
   })
 
   ipcMain.handle('cardapio:sync', async () => {

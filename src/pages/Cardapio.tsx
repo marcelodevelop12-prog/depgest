@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react'
-import { Globe, Power, RefreshCw, ExternalLink, Package, Clock, DollarSign, Truck, ShoppingBag, AlertCircle, Camera, Check } from 'lucide-react'
+import { Globe, Power, RefreshCw, ExternalLink, Package, Clock, DollarSign, Truck, ShoppingBag, AlertCircle, Camera, Check, Pencil, X } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency } from '../lib/utils'
 
@@ -21,6 +21,14 @@ export default function Cardapio() {
   const logoInputRef = useRef<HTMLInputElement>(null)
   const [pedidosOnline, setPedidosOnline] = useState<any[]>([])
   const [aba, setAba] = useState<'config' | 'produtos' | 'pedidos'>('config')
+
+  // Modal de edição por produto
+  const [editProduto, setEditProduto] = useState<any>(null)
+  const [editDescricao, setEditDescricao] = useState('')
+  const [editFotoPath, setEditFotoPath] = useState('')
+  const [editFotoPreview, setEditFotoPreview] = useState('')
+  const [savingProduto, setSavingProduto] = useState(false)
+  const produtoFotoInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadConfig()
@@ -153,6 +161,55 @@ export default function Cardapio() {
       loadPedidosOnline()
     } else {
       toast.error(result.erro || 'Erro ao aceitar pedido')
+    }
+  }
+
+  function pathToImgSrc(p: string): string {
+    // Usa protocolo customizado registrado no main process — sem bloqueio de CSP
+    return 'local-image://' + p.replace(/\\/g, '/')
+  }
+
+  function abrirEditProduto(e: React.MouseEvent, produto: any) {
+    e.stopPropagation()
+    setEditProduto(produto)
+    setEditDescricao(produto.descricao || '')
+    setEditFotoPath('')
+    setEditFotoPreview(produto.foto_path ? pathToImgSrc(produto.foto_path) : '')
+  }
+
+  function handleProdutoFotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setEditFotoPath((file as any).path || '')
+    const reader = new FileReader()
+    reader.onload = ev => setEditFotoPreview(ev.target?.result as string)
+    reader.readAsDataURL(file)
+  }
+
+  async function salvarProdutoCardapio() {
+    if (!editProduto) return
+    setSavingProduto(true)
+    try {
+      // Atualiza descrição localmente
+      if (window.api) {
+        const r = await window.api.produtos.update(editProduto.id, { ...editProduto, descricao: editDescricao }) as any
+        if (r && r.ok === false) throw new Error(r.error || 'Erro ao salvar descrição')
+      }
+
+      // Faz upload da foto se o usuário selecionou uma nova
+      if (editFotoPath && window.api) {
+        const r = await window.api.cardapio.uploadFoto(String(editProduto.id), editFotoPath)
+        if (!r?.ok) throw new Error(r?.erro || 'Erro ao enviar foto')
+        toast.success('Foto enviada para o cardápio online!')
+      }
+
+      toast.success('Produto atualizado!')
+      setEditProduto(null)
+      loadProdutos()
+    } catch (e: any) {
+      toast.error(e?.message || 'Erro ao salvar')
+    } finally {
+      setSavingProduto(false)
     }
   }
 
@@ -417,7 +474,7 @@ export default function Cardapio() {
                     {selecionados.has(p.id) && <span className="text-xs font-bold text-black">✓</span>}
                   </div>
                   {p.foto_path && (
-                    <img src={`file://${p.foto_path}`} className="w-12 h-12 rounded-lg object-cover" />
+                    <img src={pathToImgSrc(p.foto_path)} className="w-12 h-12 rounded-lg object-cover" />
                   )}
                   {!p.foto_path && (
                     <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: 'var(--bg)' }}>
@@ -432,7 +489,17 @@ export default function Cardapio() {
                     <p className="text-sm font-semibold" style={{ color: '#F5A623' }}>
                       {p.preco_venda ? formatCurrency(p.preco_venda) : '—'}
                     </p>
+                    {p.descricao && (
+                      <p className="text-xs mt-0.5 max-w-[160px] truncate" style={{ color: 'var(--text-secondary)' }}>{p.descricao}</p>
+                    )}
                   </div>
+                  <button
+                    onClick={e => abrirEditProduto(e, p)}
+                    title="Editar foto e descrição do cardápio"
+                    className="flex-shrink-0 p-2 rounded-lg transition-colors hover:bg-white/10"
+                    style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>
+                    <Pencil size={14} />
+                  </button>
                 </div>
               ))}
 
@@ -493,6 +560,102 @@ export default function Cardapio() {
           </div>
         )}
       </div>
+
+      {/* Modal: editar foto e descrição do produto no cardápio */}
+      {editProduto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(0,0,0,0.7)' }}
+          onClick={() => setEditProduto(null)}>
+          <div className="w-full max-w-md rounded-2xl p-6 space-y-5"
+            style={{ background: 'var(--card)', border: '1px solid var(--border)' }}
+            onClick={e => e.stopPropagation()}>
+
+            {/* Cabeçalho */}
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-bold text-base">Editar no Cardápio</h2>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--text-secondary)' }}>{editProduto.nome}</p>
+              </div>
+              <button onClick={() => setEditProduto(null)}
+                className="p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                style={{ color: 'var(--text-secondary)' }}>
+                <X size={16} />
+              </button>
+            </div>
+
+            {/* Foto */}
+            <div>
+              <label className="block text-xs font-medium mb-2" style={{ color: 'var(--text-secondary)' }}>
+                Foto do produto
+                <span className="ml-1 font-normal">(aparece no cardápio online)</span>
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="w-24 h-24 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden"
+                  style={{ border: '2px dashed var(--border)', background: 'var(--bg)' }}>
+                  {editFotoPreview
+                    ? <img src={editFotoPreview} className="w-full h-full object-cover" />
+                    : <Camera size={28} style={{ color: 'var(--text-secondary)' }} />
+                  }
+                </div>
+                <div className="flex-1 space-y-2">
+                  <input
+                    ref={produtoFotoInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleProdutoFotoSelect}
+                  />
+                  <button
+                    onClick={() => produtoFotoInputRef.current?.click()}
+                    className="flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-medium w-full justify-center transition-colors hover:bg-white/5"
+                    style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)', background: 'var(--bg)' }}>
+                    <Camera size={13} />
+                    {editFotoPreview ? 'Trocar foto' : 'Escolher foto'}
+                  </button>
+                  {editFotoPath && (
+                    <p className="text-xs text-center" style={{ color: '#22C55E' }}>✓ Nova foto selecionada</p>
+                  )}
+                  {!editFotoPath && !editFotoPreview && (
+                    <p className="text-xs text-center" style={{ color: 'var(--text-secondary)' }}>
+                      Sem foto — aparecerá sem imagem no cardápio
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Descrição */}
+            <div>
+              <label className="block text-xs font-medium mb-1.5" style={{ color: 'var(--text-secondary)' }}>
+                Descrição
+                <span className="ml-1 font-normal">(aparece abaixo do nome no cardápio)</span>
+              </label>
+              <textarea
+                value={editDescricao}
+                onChange={e => setEditDescricao(e.target.value)}
+                rows={3}
+                placeholder="Ex: Gelada, 600ml, long neck..."
+                className="w-full px-3 py-2.5 rounded-xl text-sm resize-none"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+
+            {/* Ações */}
+            <div className="flex gap-3 pt-1">
+              <button onClick={() => setEditProduto(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-medium transition-colors hover:bg-white/5"
+                style={{ border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+                Cancelar
+              </button>
+              <button onClick={salvarProdutoCardapio} disabled={savingProduto}
+                className="flex-1 py-2.5 rounded-xl text-sm font-semibold disabled:opacity-50"
+                style={{ background: '#F5A623', color: '#000' }}>
+                {savingProduto ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

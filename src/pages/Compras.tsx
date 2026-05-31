@@ -10,10 +10,13 @@ interface Compra {
   id: number
   fornecedor_id: number
   fornecedor_nome: string
-  data: string
+  data?: string
+  data_compra?: string
+  created_at?: string
   status: 'pendente' | 'recebida' | 'cancelada'
   total: number
-  nota_fiscal: string
+  nota_fiscal?: string
+  numero_nf?: string
   itens: ItemCompra[]
 }
 
@@ -133,11 +136,30 @@ export default function Compras() {
   async function confirmarXml() {
     if (!window.api || !xmlData) return
     try {
-      await window.api.compras.create({ ...xmlData, source: 'xml' })
+      // Mapeia itens do formato XML para o formato do create
+      const payload = {
+        fornecedor_id: xmlData.fornecedor_id || null,
+        numero_nf: xmlData.numero_nf ? String(xmlData.numero_nf) : null,
+        total: xmlData.total || 0,
+        observacoes: xmlData.emitente?.xNome || xmlData.emitente?.nome || null,
+        itens: (xmlData.itens || []).map((it: any) => ({
+          produto_id: it.produto_id || null,
+          produto_unidade_id: it.produto_unidade_id || null,
+          descricao: it.descricao || it.nome || '—',
+          quantidade: it.quantidade || 0,
+          preco_unitario: it.preco_unitario || 0,
+          total: it.total || 0,
+        })),
+      }
+      await window.api.compras.create(payload)
       toast.success('Compra importada com sucesso!')
       setXmlModal(false)
+      setXmlData(null)
       load()
-    } catch { toast.error('Erro ao confirmar importação') }
+    } catch (err: any) {
+      console.error('Erro ao confirmar XML:', err)
+      toast.error(`Erro: ${err?.message || 'Falha ao salvar compra'}`)
+    }
   }
 
   const filtered = compras.filter(c => {
@@ -185,7 +207,7 @@ export default function Compras() {
                   <tr key={c.id} className="border-b hover:opacity-80" style={{ borderColor: 'var(--border)' }}>
                     <td className="py-3 px-2 font-mono text-xs" style={{ color: 'var(--text-secondary)' }}>{c.nota_fiscal}</td>
                     <td className="py-3 px-2 font-medium" style={{ color: 'var(--text-primary)' }}>{c.fornecedor_nome}</td>
-                    <td className="py-3 px-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{formatDate(c.data)}</td>
+                    <td className="py-3 px-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{formatDate(c.data_compra || c.created_at)}</td>
                     <td className="py-3 px-2 text-xs" style={{ color: 'var(--text-secondary)' }}>{c.itens.length} item(ns)</td>
                     <td className="py-3 px-2 font-bold" style={{ color: '#F5A623' }}>{formatCurrency(c.total)}</td>
                     <td className="py-3 px-2">
@@ -297,7 +319,7 @@ export default function Compras() {
             <div className="p-4 space-y-3">
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div><span style={{ color: 'var(--text-secondary)' }}>Fornecedor: </span><strong style={{ color: 'var(--text-primary)' }}>{detailCompra.fornecedor_nome}</strong></div>
-                <div><span style={{ color: 'var(--text-secondary)' }}>Data: </span><strong style={{ color: 'var(--text-primary)' }}>{formatDate(detailCompra.data)}</strong></div>
+                <div><span style={{ color: 'var(--text-secondary)' }}>Data: </span><strong style={{ color: 'var(--text-primary)' }}>{formatDate(detailCompra.data_compra || detailCompra.created_at)}</strong></div>
               </div>
               <table className="w-full text-sm">
                 <thead><tr style={{ borderBottom: '1px solid var(--border)' }}>
@@ -325,35 +347,36 @@ export default function Compras() {
       {/* XML Modal */}
       {xmlModal && xmlData && (
         <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
-          <div className="w-full max-w-lg rounded-xl shadow-2xl" style={{ background: 'var(--card)' }}>
-            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+          <div className="w-full max-w-lg rounded-xl shadow-2xl flex flex-col" style={{ background: 'var(--card)', maxHeight: '85vh' }}>
+            <div className="flex items-center justify-between p-4 border-b flex-shrink-0" style={{ borderColor: 'var(--border)' }}>
               <h2 className="font-bold" style={{ color: 'var(--text-primary)' }}>Importar NF-e</h2>
               <button onClick={() => setXmlModal(false)}><X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} /></button>
             </div>
-            <div className="p-4 space-y-3">
+            <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
               <div className="p-3 rounded-lg text-sm" style={{ background: 'var(--bg)' }}>
-                <p style={{ color: 'var(--text-secondary)' }}>Emitente: <strong style={{ color: 'var(--text-primary)' }}>{xmlData.emitente}</strong></p>
+                <p style={{ color: 'var(--text-secondary)' }}>Emitente: <strong style={{ color: 'var(--text-primary)' }}>{xmlData.emitente?.xNome || xmlData.emitente?.nome || '—'}{xmlData.emitente?.CNPJ ? ` · ${xmlData.emitente.CNPJ}` : ''}</strong></p>
                 <p style={{ color: 'var(--text-secondary)' }}>Total: <strong style={{ color: '#F5A623' }}>{formatCurrency(xmlData.total)}</strong></p>
+                <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>{(xmlData.itens || []).length} itens</p>
               </div>
               <table className="w-full text-xs">
                 <thead><tr style={{ borderBottom: '1px solid var(--border)' }}>
-                  {['EAN', 'Nome', 'Qtd', 'Preço Unit.'].map(h => <th key={h} className="pb-2 text-left px-2 font-semibold" style={{ color: 'var(--text-secondary)' }}>{h}</th>)}
+                  {['EAN', 'Descrição', 'Qtd', 'Preço Unit.'].map(h => <th key={h} className="pb-2 text-left px-2 font-semibold" style={{ color: 'var(--text-secondary)' }}>{h}</th>)}
                 </tr></thead>
                 <tbody>
                   {(xmlData.itens || []).map((it: any, i: number) => (
                     <tr key={i} style={{ borderBottom: '1px solid var(--border)' }}>
-                      <td className="py-2 px-2 font-mono">{it.ean}</td>
-                      <td className="py-2 px-2" style={{ color: 'var(--text-primary)' }}>{it.nome}</td>
+                      <td className="py-2 px-2 font-mono text-xs">{it.ean || '—'}</td>
+                      <td className="py-2 px-2" style={{ color: 'var(--text-primary)' }}>{it.descricao || it.nome || '—'}</td>
                       <td className="py-2 px-2" style={{ color: 'var(--text-secondary)' }}>{it.quantidade}</td>
                       <td className="py-2 px-2" style={{ color: '#F5A623' }}>{formatCurrency(it.preco_unitario)}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div className="flex gap-2">
-                <button onClick={() => setXmlModal(false)} className="flex-1 px-3 py-2 rounded-lg text-sm" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Cancelar</button>
-                <button onClick={confirmarXml} className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>Confirmar Importação</button>
-              </div>
+            </div>
+            <div className="flex gap-2 p-4 flex-shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+              <button onClick={() => setXmlModal(false)} className="flex-1 px-3 py-2 rounded-lg text-sm" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Cancelar</button>
+              <button onClick={confirmarXml} className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>Confirmar Importação</button>
             </div>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { Search, X, Plus, Minus, Trash2, User, ShoppingCart, CreditCard, Banknote, Smartphone, ChevronRight, Printer, MessageCircle, Percent, Tag } from 'lucide-react'
 import { usePdvStore } from '../store/pdv'
+import { useAppStore } from '../store/app'
 import { formatCurrency, whatsappUrl, gerarLinkRastreio } from '../lib/utils'
 import toast from 'react-hot-toast'
 import QRCode from 'qrcode'
@@ -18,6 +19,8 @@ export default function PDV() {
   const [buscaCliente, setBuscaCliente] = useState('')
   const [showPagamento, setShowPagamento] = useState(false)
   const [showCliente, setShowCliente] = useState(false)
+  const [showCupom, setShowCupom] = useState(false)
+  const [ultimaVenda, setUltimaVenda] = useState<any>(null)
   const scanBuffer = useRef('')
   const scanTimer = useRef<ReturnType<typeof setTimeout>>()
 
@@ -35,7 +38,7 @@ export default function PDV() {
   }, [busca, categoriaAtiva])
 
   function focusScanner() {
-    if (!showPagamento && !showCliente) {
+    if (!showPagamento && !showCliente && !showCupom) {
       scanRef.current?.focus()
     }
   }
@@ -445,6 +448,10 @@ export default function PDV() {
       )}
 
       {/* Modal: pagamento */}
+      {showCupom && ultimaVenda && (
+        <CupomModal venda={ultimaVenda} onClose={() => setShowCupom(false)} />
+      )}
+
       {showPagamento && (
         <PagamentoModal
           total={store.total()}
@@ -456,6 +463,8 @@ export default function PDV() {
           onClose={() => setShowPagamento(false)}
           onSuccess={(resultado: any) => {
             setShowPagamento(false)
+            setUltimaVenda(resultado)
+            setShowCupom(true)
             store.limpar()
             toast.success(`Venda #${resultado.numero} finalizada!`)
           }}
@@ -527,12 +536,22 @@ function PagamentoModal({ total, cliente, itens, descontoGlobal, observacao, onS
 
       if (!window.api) {
         toast.success('Venda simulada (modo dev)')
-        onSuccess({ numero: '000001', token: 'TOKEN123' })
+        onSuccess({ numero: '000001', token: 'TOKEN123', itens, total, troco, subtotal: pedidoData.subtotal, desconto: descontoGlobal, forma_pagamento: forma, forma_pagamento2: forma2 || null, valor_pago: parseFloat(valorPago) || total, valor_pago2: parseFloat(valor2) || null, cliente, observacao })
         return
       }
 
       const resultado = await window.api.pedidos.create(pedidoData)
-      onSuccess(resultado)
+      onSuccess({
+        ...resultado,
+        itens, total, troco,
+        subtotal: pedidoData.subtotal,
+        desconto: descontoGlobal,
+        forma_pagamento: forma,
+        forma_pagamento2: forma2 || null,
+        valor_pago: parseFloat(valorPago) || total,
+        valor_pago2: parseFloat(valor2) || null,
+        cliente, observacao,
+      })
     } catch (err) {
       toast.error('Erro ao finalizar venda')
     } finally {
@@ -666,6 +685,150 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
         {children}
       </div>
     </div>
+  )
+}
+
+// ─── Cupom de Venda ─────────────────────────────────────────────────────────
+
+function CupomModal({ venda, onClose }: { venda: any; onClose: () => void }) {
+  const { loja } = useAppStore()
+  const now = new Date()
+  const dataStr = now.toLocaleDateString('pt-BR')
+  const horaStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+
+  const formaNome: Record<string, string> = {
+    dinheiro: 'DINHEIRO', pix: 'PIX', debito: 'DÉBITO',
+    credito: 'CRÉDITO', fiado: 'FIADO', misto: 'MISTO',
+  }
+
+  function imprimir() {
+    window.print()
+  }
+
+  return (
+    <>
+      {/* Estilo de impressão: esconde tudo exceto o cupom */}
+      <style>{`
+        @media print {
+          body > * { display: none !important; }
+          #cupom-print-root { display: block !important; position: fixed; top: 0; left: 0; }
+        }
+      `}</style>
+
+      {/* Overlay */}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
+        style={{ background: 'rgba(0,0,0,0.75)' }}>
+
+        <div className="flex flex-col items-center gap-4 w-full max-w-sm">
+          {/* Botões fora do cupom */}
+          <div className="flex gap-3 w-full">
+            <button onClick={onClose}
+              className="flex-1 py-2.5 rounded-xl text-sm font-medium"
+              style={{ background: 'var(--card)', border: '1px solid var(--border)', color: 'var(--text-secondary)' }}>
+              Fechar
+            </button>
+            <button onClick={imprimir}
+              className="flex-1 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-center gap-2"
+              style={{ background: '#F5A623', color: '#000' }}>
+              <Printer size={15} /> Imprimir / PDF
+            </button>
+          </div>
+
+          {/* Cupom */}
+          <div id="cupom-print-root"
+            style={{
+              width: 300, background: '#fff', color: '#000',
+              fontFamily: 'monospace', fontSize: 12, padding: '12px 8px',
+              borderRadius: 8, lineHeight: 1.5,
+            }}>
+
+            {/* Cabeçalho */}
+            <div style={{ textAlign: 'center', marginBottom: 8 }}>
+              <div style={{ fontWeight: 'bold', fontSize: 14 }}>{(loja as any)?.loja_nome || 'DEPÓSITO'}</div>
+              {(loja as any)?.loja_endereco && <div style={{ fontSize: 10 }}>{(loja as any).loja_endereco}</div>}
+              {(loja as any)?.loja_telefone && <div style={{ fontSize: 10 }}>Tel: {(loja as any).loja_telefone}</div>}
+              <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+              <div style={{ fontSize: 11 }}>Venda #{String(venda.numero || '').padStart(6, '0')}</div>
+              <div style={{ fontSize: 10 }}>{dataStr} {horaStr}</div>
+              {venda.cliente?.nome && <div style={{ fontSize: 10 }}>Cliente: {venda.cliente.nome}</div>}
+            </div>
+
+            <div style={{ borderTop: '1px dashed #000', margin: '4px 0' }} />
+
+            {/* Itens */}
+            <div style={{ marginBottom: 4 }}>
+              {(venda.itens || []).map((item: any, i: number) => (
+                <div key={i} style={{ marginBottom: 4 }}>
+                  <div style={{ fontWeight: 'bold', fontSize: 11 }}>{item.nome}</div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11 }}>
+                    <span style={{ color: '#444' }}>
+                      {item.quantidade} x {formatCurrency(item.preco_unitario)}
+                      {item.desconto > 0 ? ` (-${item.desconto}%)` : ''}
+                    </span>
+                    <span style={{ fontWeight: 'bold' }}>{formatCurrency(item.total)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ borderTop: '1px dashed #000', margin: '4px 0' }} />
+
+            {/* Totais */}
+            <div style={{ fontSize: 11 }}>
+              {venda.desconto > 0 && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Subtotal</span><span>{formatCurrency(venda.subtotal)}</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', color: '#c00' }}>
+                    <span>Desconto ({venda.desconto}%)</span>
+                    <span>-{formatCurrency(venda.subtotal - venda.total)}</span>
+                  </div>
+                </>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', fontSize: 13, marginTop: 2 }}>
+                <span>TOTAL</span><span>{formatCurrency(venda.total)}</span>
+              </div>
+            </div>
+
+            <div style={{ borderTop: '1px dashed #000', margin: '4px 0' }} />
+
+            {/* Pagamento */}
+            <div style={{ fontSize: 11 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                <span>Pagamento</span>
+                <span>{formaNome[venda.forma_pagamento] || venda.forma_pagamento}</span>
+              </div>
+              {venda.forma_pagamento2 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Pagamento 2</span>
+                  <span>{formaNome[venda.forma_pagamento2] || venda.forma_pagamento2}</span>
+                </div>
+              )}
+              {venda.forma_pagamento === 'dinheiro' && (
+                <>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span>Valor pago</span><span>{formatCurrency(venda.valor_pago)}</span>
+                  </div>
+                  {venda.troco > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                      <span>Troco</span><span>{formatCurrency(venda.troco)}</span>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Rodapé */}
+            <div style={{ borderTop: '1px dashed #000', margin: '6px 0' }} />
+            <div style={{ textAlign: 'center', fontSize: 10, color: '#555' }}>
+              <div>Obrigado pela preferência!</div>
+              <div>Volte sempre 🍺</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   )
 }
 

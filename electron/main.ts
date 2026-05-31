@@ -1,7 +1,6 @@
-import { app, BrowserWindow, ipcMain, shell, dialog, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, shell, dialog, Notification, protocol, net } from 'electron'
 import { autoUpdater } from 'electron-updater'
 import path from 'path'
-import fs from 'fs'
 import { initDatabase, getDb } from './database'
 import { supabaseAdmin as supabase } from './lib/supabase'
 import { registerLicenseHandlers } from './ipc/licenca'
@@ -19,6 +18,11 @@ import { registerCardapioHandlers } from './ipc/cardapio'
 import { startLocalServer } from './server'
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+
+// Deve ser chamado ANTES do app.whenReady()
+protocol.registerSchemesAsPrivileged([
+  { scheme: 'local-image', privileges: { secure: true, standard: true, supportFetchAPI: true } },
+])
 
 let mainWindow: BrowserWindow | null = null
 
@@ -59,6 +63,13 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
+  // Protocolo para servir imagens locais sem restrições de CSP/origem
+  protocol.handle('local-image', (request) => {
+    // URL: local-image://C:/Users/.../foto.jpg
+    const filePath = decodeURIComponent(request.url.slice('local-image://'.length))
+    return net.fetch('file:///' + filePath.replace(/\\/g, '/'))
+  })
+
   const userDataPath = app.getPath('userData')
   const dbPath = path.join(userDataPath, 'depgest.db')
 
@@ -90,7 +101,7 @@ app.whenReady().then(async () => {
   ipcMain.on('cardapio:init-realtime', () => tryStartPedidosRealtime())
 
   if (!isDev) {
-    autoUpdater.checkForUpdatesAndNotify()
+    autoUpdater.checkForUpdates()
   }
 })
 
@@ -166,15 +177,6 @@ function registerSystemHandlers() {
   ipcMain.handle('system:save-dialog', async (_, options) => {
     const result = await dialog.showSaveDialog(mainWindow!, options)
     return result
-  })
-
-  ipcMain.handle('system:read-file', async (_, filePath: string) => {
-    return fs.readFileSync(filePath)
-  })
-
-  ipcMain.handle('system:write-file', async (_, filePath: string, data: Buffer | string) => {
-    fs.writeFileSync(filePath, data)
-    return true
   })
 
   ipcMain.handle('system:open-external', async (_, url: string) => {

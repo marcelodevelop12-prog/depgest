@@ -1,4 +1,5 @@
 import { ipcMain, app } from 'electron'
+import Database from 'better-sqlite3'
 import { getDb } from '../database'
 import path from 'path'
 import fs from 'fs'
@@ -167,27 +168,74 @@ export function registerConfigHandlers() {
   })
 
   ipcMain.handle('config:backup', async (_, destPath: string) => {
-    const userDataPath = app.getPath('userData')
-    const dbPath = path.join(userDataPath, 'depgest.db')
+    const dbCopy = destPath.replace(/\.zip$/i, '.db')
 
-    // Copia o arquivo db direto (SQLite WAL já garante consistência)
-    fs.copyFileSync(dbPath, destPath.replace('.zip', '.db'))
+    // Online backup do better-sqlite3: gera um .db consistente mesmo com WAL
+    // ativo (não basta copiar o arquivo, pois dados podem estar no -wal).
+    await getDb().backup(dbCopy)
 
-    // Tenta criar zip com PowerShell (Windows)
-    try {
-      const dbCopy = destPath.replace('.zip', '.db')
-      fs.copyFileSync(dbPath, dbCopy)
-      execSync(`powershell -command "Compress-Archive -Path '${dbCopy}' -DestinationPath '${destPath}' -Force"`)
-      fs.unlinkSync(dbCopy)
-    } catch {
-      // Se falhar o zip, mantém a cópia .db
+    // Se o destino for .zip, comprime via PowerShell (Windows)
+    if (destPath.toLowerCase().endsWith('.zip')) {
+      try {
+        execSync(`powershell -command "Compress-Archive -LiteralPath '${dbCopy}' -DestinationPath '${destPath}' -Force"`)
+        fs.unlinkSync(dbCopy)
+      } catch {
+        // Se o zip falhar, mantém a cópia .db ao lado
+      }
     }
 
     return true
   })
 
   ipcMain.handle('config:restore', async (_, srcPath: string) => {
-    // Extract zip to userData
-    return true
+    const userDataPath = app.getPath('userData')
+    const dbPath = path.join(userDataPath, 'depgest.db')
+
+    let dbToRestore = srcPath
+
+    // Se for .zip, extrai e localiza o .db dentro
+    if (srcPath.toLowerCase().endsWith('.zip')) {
+      const tmpDir = path.join(userDataPath, '_restore_tmp')
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }) } catch {}
+      fs.mkdirSync(tmpDir, { recursive: true })
+      try {
+        execSync(`powershell -command "Expand-Archive -LiteralPath '${srcPath}' -DestinationPath '${tmpDir}' -Force"`)
+      } catch (e: any) {
+        return { ok: false, error: 'Falha ao extrair o backup (.zip)' }
+      }
+      const dbFile = fs.readdirSync(tmpDir).find(f => f.toLowerCase().endsWith('.db'))
+      if (!dbFile) return { ok: false, error: 'Backup inválido: nenhum arquivo .db encontrado' }
+      dbToRestore = path.join(tmpDir, dbFile)
+    }
+
+    if (!fs.existsSync(dbToRestore)) {
+      return { ok: false, error: 'Arquivo de backup não encontrado' }
+    }
+
+    // Valida que é um SQLite do DepGest (tem a tabela licenca) ANTES de sobrescrever
+    try {
+      const test = new Database(dbToRestore, { readonly: true })
+      const ok = test.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='licenca'").get()
+      test.close()
+      if (!ok) return { ok: false, error: 'Backup inválido: não parece ser um backup do DepGest' }
+    } catch {
+      return { ok: false, error: 'Backup corrompido ou ilegível' }
+    }
+
+    // Salva o banco atual como segurança antes de substituir
+    try { fs.copyFileSync(dbPath, dbPath + '.pre-restore') } catch {}
+
+    // Fecha a conexão atual e substitui o arquivo
+    try { getDb().close() } catch {}
+    fs.copyFileSync(dbToRestore, dbPath)
+    // Remove WAL/SHM antigos para não sobrepor dados do banco restaurado
+    for (const ext of ['-wal', '-shm']) {
+      try { fs.unlinkSync(dbPath + ext) } catch {}
+    }
+
+    // Reinicia o app para carregar o banco restaurado
+    app.relaunch()
+    app.exit(0)
+    return { ok: true }
   })
 }

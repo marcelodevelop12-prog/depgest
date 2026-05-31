@@ -14,10 +14,13 @@ interface Fornecedor {
 }
 interface Compra {
   id: number
-  data: string
+  data?: string
+  data_compra?: string
+  created_at?: string
   total: number
   status: string
-  nota_fiscal: string
+  nota_fiscal?: string
+  numero_nf?: string
 }
 
 const MOCK_FORNECEDORES: Fornecedor[] = [
@@ -178,8 +181,8 @@ export default function Fornecedores() {
                   {compras.map(c => (
                     <div key={c.id} className="flex items-center justify-between py-2 border-b text-xs" style={{ borderColor: 'var(--border)' }}>
                       <div>
-                        <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{c.nota_fiscal}</p>
-                        <p style={{ color: 'var(--text-secondary)' }}>{formatDate(c.data)}</p>
+                        <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{c.numero_nf || c.nota_fiscal || 'Sem NF'}</p>
+                        <p style={{ color: 'var(--text-secondary)' }}>{formatDate(c.data_compra || c.created_at)}</p>
                       </div>
                       <div className="text-right">
                         <p className="font-bold" style={{ color: '#F5A623' }}>{formatCurrency(c.total)}</p>
