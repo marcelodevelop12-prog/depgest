@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Search, Plus, X, MessageCircle, ChevronRight, CreditCard, ArrowUpCircle, ArrowDownCircle } from 'lucide-react'
+import { Search, Plus, X, MessageCircle, ChevronRight, ChevronLeft, CreditCard, ArrowUpCircle, ArrowDownCircle, Archive, BookCheck } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { formatCurrency, formatDate, formatDateTime, whatsappUrl } from '../lib/utils'
 
@@ -38,6 +38,16 @@ const MOCK_FIADO_MOVS: FiadoMov[] = [
 
 const EMPTY_FORM = { nome: '', cpf: '', telefone: '', endereco: '', bairro: '', cidade: '', limite_fiado: 0, observacoes: '' }
 
+// Semáforo do fiado: verde (confortável) → amarelo (se aproximando do limite) → vermelho (atingiu/passou)
+function fiadoCor(saldo: number, limite: number): string {
+  if (!saldo || saldo <= 0) return '#22C55E'           // sem dívida
+  if (!limite || limite <= 0) return '#EF4444'          // tem dívida e sem limite definido
+  const pct = saldo / limite
+  if (pct >= 1) return '#EF4444'                         // chegou/passou o limite
+  if (pct >= 0.8) return '#F5A623'                       // se aproximando
+  return '#22C55E'                                       // confortável
+}
+
 export default function Clientes() {
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
@@ -48,12 +58,17 @@ export default function Clientes() {
   const [saving, setSaving] = useState(false)
   const [fiadoPanel, setFiadoPanel] = useState<Cliente | null>(null)
   const [fiadoMovs, setFiadoMovs] = useState<FiadoMov[]>([])
-  const [fiadoTab, setFiadoTab] = useState<'resumo' | 'extrato'>('resumo')
+  const [fiadoTab, setFiadoTab] = useState<'resumo' | 'extrato' | 'fechamentos'>('resumo')
   const [pagamentoModal, setPagamentoModal] = useState(false)
   const [debitoModal, setDebitoModal] = useState(false)
   const [pagValor, setPagValor] = useState('')
   const [debDescricao, setDebDescricao] = useState('')
   const [debValor, setDebValor] = useState('')
+  const [ciclos, setCiclos] = useState<any[]>([])
+  const [cicloView, setCicloView] = useState<any | null>(null)
+  const [cicloMovs, setCicloMovs] = useState<any[]>([])
+  const [fecharModal, setFecharModal] = useState(false)
+  const [fechando, setFechando] = useState(false)
 
   useEffect(() => { load() }, [])
 
@@ -70,15 +85,45 @@ export default function Clientes() {
   async function openFiado(c: Cliente) {
     setFiadoPanel(c)
     setFiadoTab('resumo')
+    setCicloView(null)
     if (!window.api) {
       setFiadoMovs(MOCK_FIADO_MOVS.filter(m => m.descricao).map(m => ({ ...m })))
+      setCiclos([])
       return
     }
     try {
       const res = await window.api.clientes.getFiado(c.id)
       const movs = Array.isArray(res) ? res : (res?.movimentacoes ?? [])
       setFiadoMovs(movs)
+      if (res && typeof res === 'object' && 'saldo' in res) {
+        setFiadoPanel(prev => prev ? { ...prev, saldo_fiado: res.saldo, limite_fiado: res.limite } : prev)
+      }
     } catch { toast.error('Erro ao carregar fiado') }
+    // Fechamentos: carrega à parte, não deve bloquear/quebrar o painel de fiado
+    try {
+      setCiclos(await window.api.clientes.listCiclos(c.id))
+    } catch { setCiclos([]) }
+  }
+
+  async function verCiclo(ciclo: any) {
+    setCicloView(ciclo)
+    if (!window.api) { setCicloMovs([]); return }
+    try { setCicloMovs(await window.api.clientes.cicloMovimentacoes(ciclo.id)) } catch { setCicloMovs([]) }
+  }
+
+  async function fecharConta() {
+    if (!fiadoPanel) return
+    setFechando(true)
+    try {
+      if (!window.api) { toast.success('Conta fechada (demo)'); setFecharModal(false); return }
+      const r = await window.api.clientes.fecharCiclo({ cliente_id: fiadoPanel.id })
+      toast.success(`Fechamento #${r.numero} concluído`)
+      setFecharModal(false)
+      await load()
+      await openFiado(fiadoPanel)
+      setFiadoTab('fechamentos')
+    } catch (e: any) { toast.error(e?.message || 'Erro ao fechar conta') }
+    finally { setFechando(false) }
   }
 
   function openNew() { setEditCliente(null); setForm({ ...EMPTY_FORM }); setModalOpen(true) }
@@ -187,7 +232,7 @@ export default function Clientes() {
                   </div>
                   <div className="text-right">
                     <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>Fiado</p>
-                    <p className="font-bold text-sm" style={{ color: c.saldo_fiado > 0 ? '#EF4444' : '#22C55E' }}>
+                    <p className="font-bold text-sm" style={{ color: fiadoCor(c.saldo_fiado, c.limite_fiado) }}>
                       {formatCurrency(c.saldo_fiado)}
                     </p>
                   </div>
@@ -221,13 +266,15 @@ export default function Clientes() {
               <button onClick={() => setFiadoPanel(null)}><X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} /></button>
             </div>
             <div className="p-4 space-y-3">
-              <div className="rounded-xl p-4 text-center" style={{ background: fiadoPanel.saldo_fiado > 0 ? '#EF444411' : '#22C55E11', border: `1px solid ${fiadoPanel.saldo_fiado > 0 ? '#EF444433' : '#22C55E33'}` }}>
+              {(() => { const cor = fiadoCor(fiadoPanel.saldo_fiado, fiadoPanel.limite_fiado); return (
+              <div className="rounded-xl p-4 text-center" style={{ background: `${cor}11`, border: `1px solid ${cor}33` }}>
                 <p className="text-xs font-medium" style={{ color: 'var(--text-secondary)' }}>Saldo Devedor</p>
-                <p className="text-3xl font-bold mt-1" style={{ color: fiadoPanel.saldo_fiado > 0 ? '#EF4444' : '#22C55E' }}>
+                <p className="text-3xl font-bold mt-1" style={{ color: cor }}>
                   {formatCurrency(fiadoPanel.saldo_fiado)}
                 </p>
                 <p className="text-xs mt-1" style={{ color: 'var(--text-secondary)' }}>Limite: {formatCurrency(fiadoPanel.limite_fiado)}</p>
               </div>
+              ) })()}
               <div className="flex gap-2">
                 <button onClick={() => { setPagValor(''); setPagamentoModal(true) }} className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium" style={{ background: '#22C55E22', color: '#22C55E', border: '1px solid #22C55E44' }}>
                   <ArrowDownCircle className="w-4 h-4" /> Receber Pagamento
@@ -241,27 +288,79 @@ export default function Clientes() {
                   <MessageCircle className="w-4 h-4" /> Cobrar via WhatsApp
                 </button>
               )}
+              <button onClick={() => setFecharModal(true)} disabled={fiadoMovs.filter(m => m.descricao).length === 0}
+                className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium"
+                style={{ background: '#F5A62318', color: '#F5A623', border: '1px solid #F5A62340', opacity: fiadoMovs.filter(m => m.descricao).length === 0 ? 0.4 : 1 }}>
+                <Archive className="w-4 h-4" /> Fechar conta (virar página)
+              </button>
               <div className="flex gap-1 border-b" style={{ borderColor: 'var(--border)' }}>
-                {[['resumo', 'Resumo'], ['extrato', 'Extrato']].map(([k, l]) => (
-                  <button key={k} onClick={() => setFiadoTab(k as any)} className="px-3 py-1.5 text-xs font-medium border-b-2"
+                {[['resumo', 'Resumo'], ['extrato', 'Extrato'], ['fechamentos', 'Fechamentos']].map(([k, l]) => (
+                  <button key={k} onClick={() => { setFiadoTab(k as any); setCicloView(null) }} className="px-3 py-1.5 text-xs font-medium border-b-2"
                     style={{ borderColor: fiadoTab === k ? '#F5A623' : 'transparent', color: fiadoTab === k ? '#F5A623' : 'var(--text-secondary)' }}>
                     {l}
                   </button>
                 ))}
               </div>
-              <div className="space-y-2 overflow-y-auto max-h-64">
-                {fiadoMovs.filter(m => m.descricao).map(m => (
-                  <div key={m.id} className="flex items-center justify-between py-2 border-b text-xs" style={{ borderColor: 'var(--border)' }}>
-                    <div>
-                      <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{m.descricao}</p>
-                      {m.created_at && <p style={{ color: 'var(--text-secondary)' }}>{formatDate(m.created_at)}</p>}
+              {fiadoTab !== 'fechamentos' ? (
+                <div className="space-y-2 overflow-y-auto max-h-64">
+                  {fiadoMovs.filter(m => m.descricao).length === 0 && (
+                    <p className="text-xs text-center py-4" style={{ color: 'var(--text-secondary)' }}>Página em branco — sem lançamentos no ciclo atual.</p>
+                  )}
+                  {fiadoMovs.filter(m => m.descricao).map(m => (
+                    <div key={m.id} className="flex items-center justify-between py-2 border-b text-xs" style={{ borderColor: 'var(--border)' }}>
+                      <div>
+                        <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{m.descricao}</p>
+                        {m.created_at && <p style={{ color: 'var(--text-secondary)' }}>{formatDate(m.created_at)}</p>}
+                      </div>
+                      <span className="font-bold" style={{ color: m.tipo === 'debito' ? '#EF4444' : '#22C55E' }}>
+                        {m.tipo === 'debito' ? '+' : '-'}{formatCurrency(m.valor)}
+                      </span>
                     </div>
-                    <span className="font-bold" style={{ color: m.tipo === 'debito' ? '#EF4444' : '#22C55E' }}>
-                      {m.tipo === 'debito' ? '+' : '-'}{formatCurrency(m.valor)}
-                    </span>
+                  ))}
+                </div>
+              ) : cicloView ? (
+                <div className="space-y-2 overflow-y-auto max-h-64">
+                  <button onClick={() => setCicloView(null)} className="flex items-center gap-1 text-xs font-medium" style={{ color: '#F5A623' }}>
+                    <ChevronLeft className="w-3 h-3" /> Voltar aos fechamentos
+                  </button>
+                  <div className="rounded-lg p-3 text-xs space-y-1" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                    <p className="font-semibold" style={{ color: 'var(--text-primary)' }}>Fechamento #{cicloView.numero}</p>
+                    <p style={{ color: 'var(--text-secondary)' }}>Fechado em {cicloView.fechado_em ? formatDate(cicloView.fechado_em) : '-'}</p>
+                    <div className="flex justify-between pt-1"><span style={{ color: 'var(--text-secondary)' }}>Comprado (fiado)</span><span style={{ color: '#EF4444' }}>{formatCurrency(cicloView.total_debitos)}</span></div>
+                    <div className="flex justify-between"><span style={{ color: 'var(--text-secondary)' }}>Pago</span><span style={{ color: '#22C55E' }}>{formatCurrency(cicloView.total_creditos)}</span></div>
+                    <div className="flex justify-between font-semibold"><span style={{ color: 'var(--text-secondary)' }}>Saldo ao fechar</span><span style={{ color: fiadoCor(cicloView.saldo_final, fiadoPanel.limite_fiado) }}>{formatCurrency(cicloView.saldo_final)}</span></div>
                   </div>
-                ))}
-              </div>
+                  {cicloMovs.filter(m => m.descricao).map(m => (
+                    <div key={m.id} className="flex items-center justify-between py-2 border-b text-xs" style={{ borderColor: 'var(--border)' }}>
+                      <div>
+                        <p className="font-medium" style={{ color: 'var(--text-primary)' }}>{m.descricao}</p>
+                        {m.created_at && <p style={{ color: 'var(--text-secondary)' }}>{formatDate(m.created_at)}</p>}
+                      </div>
+                      <span className="font-bold" style={{ color: m.tipo === 'debito' ? '#EF4444' : '#22C55E' }}>
+                        {m.tipo === 'debito' ? '+' : '-'}{formatCurrency(m.valor)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2 overflow-y-auto max-h-64">
+                  {ciclos.length === 0 && (
+                    <p className="text-xs text-center py-4" style={{ color: 'var(--text-secondary)' }}>Nenhuma conta fechada ainda.</p>
+                  )}
+                  {ciclos.map(c => (
+                    <button key={c.id} onClick={() => verCiclo(c)} className="w-full flex items-center justify-between py-2 px-2 rounded-lg border text-xs text-left" style={{ borderColor: 'var(--border)', background: 'var(--bg)' }}>
+                      <div className="flex items-center gap-2">
+                        <BookCheck className="w-4 h-4" style={{ color: '#F5A623' }} />
+                        <div>
+                          <p className="font-medium" style={{ color: 'var(--text-primary)' }}>Fechamento #{c.numero}</p>
+                          <p style={{ color: 'var(--text-secondary)' }}>{c.fechado_em ? formatDate(c.fechado_em) : '-'} · pago {formatCurrency(c.total_creditos)}</p>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-3 h-3" style={{ color: 'var(--text-secondary)' }} />
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         )}
@@ -357,6 +456,41 @@ export default function Clientes() {
               <div className="flex gap-2">
                 <button onClick={() => setDebitoModal(false)} className="flex-1 px-3 py-2 rounded-lg text-sm" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Cancelar</button>
                 <button onClick={lancarDebito} className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#EF4444' }}>Lançar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Fechar Conta Modal */}
+      {fecharModal && fiadoPanel && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center" style={{ background: 'rgba(0,0,0,0.5)' }}>
+          <div className="w-96 rounded-xl shadow-2xl" style={{ background: 'var(--card)' }}>
+            <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: 'var(--border)' }}>
+              <h2 className="font-bold flex items-center gap-2" style={{ color: 'var(--text-primary)' }}><Archive className="w-4 h-4" style={{ color: '#F5A623' }} /> Fechar conta</h2>
+              <button onClick={() => setFecharModal(false)}><X className="w-5 h-5" style={{ color: 'var(--text-secondary)' }} /></button>
+            </div>
+            <div className="p-4 space-y-3 text-sm" style={{ color: 'var(--text-primary)' }}>
+              <p style={{ color: 'var(--text-secondary)' }}>
+                Fechar a conta de <strong style={{ color: 'var(--text-primary)' }}>{fiadoPanel.nome}</strong> significa que ele <strong style={{ color: 'var(--text-primary)' }}>acertou tudo</strong>. O resumo vai para o histórico de fechamentos, o valor recebido entra no Financeiro e a página abre nova, zerada.
+              </p>
+              <div className="rounded-lg p-3 text-xs space-y-1" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                <div className="flex justify-between"><span style={{ color: 'var(--text-secondary)' }}>Saldo a quitar</span><span className="font-bold" style={{ color: fiadoCor(fiadoPanel.saldo_fiado, fiadoPanel.limite_fiado) }}>{formatCurrency(fiadoPanel.saldo_fiado)}</span></div>
+              </div>
+              {fiadoPanel.saldo_fiado > 0 ? (
+                <p className="text-xs rounded-lg p-2" style={{ background: '#22C55E18', color: '#22C55E' }}>
+                  Ao confirmar, o saldo de {formatCurrency(fiadoPanel.saldo_fiado)} é registrado como <strong>pago</strong> e a conta zera. Só feche se o cliente realmente acertou.
+                </p>
+              ) : (
+                <p className="text-xs rounded-lg p-2" style={{ background: '#22C55E18', color: '#22C55E' }}>
+                  Conta já quitada. A nova página começa zerada.
+                </p>
+              )}
+              <div className="flex gap-2">
+                <button onClick={() => setFecharModal(false)} className="flex-1 px-3 py-2 rounded-lg text-sm" style={{ color: 'var(--text-secondary)', border: '1px solid var(--border)' }}>Cancelar</button>
+                <button onClick={fecharConta} disabled={fechando} className="flex-1 px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#F5A623' }}>
+                  {fechando ? 'Fechando...' : 'Confirmar fechamento'}
+                </button>
               </div>
             </div>
           </div>

@@ -82,6 +82,9 @@ const api = {
     lancarFiado: (data: Record<string, unknown>) => ipcRenderer.invoke('clientes:lancar-fiado', data),
     pagarFiado: (data: Record<string, unknown>) => ipcRenderer.invoke('clientes:pagar-fiado', data),
     extrato: (clienteId: number, periodo?: Record<string, unknown>) => ipcRenderer.invoke('clientes:extrato', clienteId, periodo),
+    fecharCiclo: (data: Record<string, unknown>) => ipcRenderer.invoke('clientes:fechar-ciclo', data),
+    listCiclos: (clienteId: number) => ipcRenderer.invoke('clientes:list-ciclos', clienteId),
+    cicloMovimentacoes: (cicloId: number) => ipcRenderer.invoke('clientes:ciclo-movimentacoes', cicloId),
   },
 
   // Pedidos

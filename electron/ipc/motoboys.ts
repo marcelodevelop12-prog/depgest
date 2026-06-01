@@ -27,15 +27,20 @@ export function registerMotoboyHandlers() {
     return true
   })
 
-  ipcMain.handle('motoboys:get-entregas', (_, motoboyId: number, data?: string) => {
+  ipcMain.handle('motoboys:get-entregas', (_, motoboyId?: number, data?: string) => {
     const db = getDb()
     let sql = `
-      SELECT e.*, p.numero, p.total, p.cliente_nome, p.status as pedido_status
+      SELECT e.id, e.pedido_id, e.motoboy_id, e.status, e.created_at,
+             e.saiu_as as saiu_em, e.entregue_as as chegou_em,
+             p.numero as pedido_numero, p.total, p.cliente_nome,
+             p.cliente_endereco as endereco, p.status as pedido_status
       FROM entregas e
       JOIN pedidos p ON p.id = e.pedido_id
-      WHERE e.motoboy_id = ?
+      WHERE 1=1
     `
-    const params: any[] = [motoboyId]
+    const params: any[] = []
+    // motoboyId 0/undefined = todas as entregas
+    if (motoboyId) { sql += ' AND e.motoboy_id = ?'; params.push(motoboyId) }
     if (data) { sql += ' AND date(e.created_at) = ?'; params.push(data) }
     sql += ' ORDER BY e.created_at DESC'
     return db.prepare(sql).all(...params)

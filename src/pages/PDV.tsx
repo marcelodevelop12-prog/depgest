@@ -23,6 +23,8 @@ export default function PDV() {
   const [ultimaVenda, setUltimaVenda] = useState<any>(null)
   const scanBuffer = useRef('')
   const scanTimer = useRef<ReturnType<typeof setTimeout>>()
+  const modalAbertoRef = useRef(false)
+  modalAbertoRef.current = showPagamento || showCliente || showCupom
 
   useEffect(() => {
     loadProdutos()
@@ -38,7 +40,7 @@ export default function PDV() {
   }, [busca, categoriaAtiva])
 
   function focusScanner() {
-    if (!showPagamento && !showCliente && !showCupom) {
+    if (!modalAbertoRef.current) {
       scanRef.current?.focus()
     }
   }
@@ -456,6 +458,7 @@ export default function PDV() {
         <PagamentoModal
           total={store.total()}
           cliente={store.cliente}
+          onSetCliente={store.setCliente}
           itens={store.itens}
           descontoGlobal={store.desconto_global}
           observacao={store.observacao}
@@ -475,13 +478,41 @@ export default function PDV() {
 }
 
 // Modal de Pagamento
-function PagamentoModal({ total, cliente, itens, descontoGlobal, observacao, onSetObservacao, onClose, onSuccess }: any) {
+function PagamentoModal({ total, cliente, onSetCliente, itens, descontoGlobal, observacao, onSetObservacao, onClose, onSuccess }: any) {
   const [forma, setForma] = useState<FormaPagamento>('dinheiro')
   const [forma2, setForma2] = useState<FormaPagamento | ''>('')
   const [valorPago, setValorPago] = useState('')
   const [valor2, setValor2] = useState('')
   const [loading, setLoading] = useState(false)
   const [qrCode, setQrCode] = useState('')
+  // Seleção / cadastro de cliente para fiado (fluxo autossuficiente)
+  const [fiadoBusca, setFiadoBusca] = useState('')
+  const [fiadoResultados, setFiadoResultados] = useState<any[]>([])
+  const [novoTel, setNovoTel] = useState('')
+  const [cadastrando, setCadastrando] = useState(false)
+
+  async function buscarFiado(q: string) {
+    setFiadoBusca(q)
+    if (!q || !window.api) { setFiadoResultados([]); return }
+    try {
+      const r = await window.api.clientes.list({ busca: q })
+      setFiadoResultados((r || []).slice(0, 5))
+    } catch { setFiadoResultados([]) }
+  }
+
+  async function cadastrarRapido() {
+    const nome = fiadoBusca.trim()
+    if (!nome) { toast.error('Informe o nome do cliente'); return }
+    if (!window.api) { onSetCliente({ id: Date.now(), nome, telefone: novoTel.trim() || null, saldo_fiado: 0 }); return }
+    setCadastrando(true)
+    try {
+      const { id } = await window.api.clientes.create({ nome, telefone: novoTel.trim() || null })
+      onSetCliente({ id, nome, telefone: novoTel.trim() || null, saldo_fiado: 0 })
+      setFiadoBusca(''); setFiadoResultados([]); setNovoTel('')
+      toast.success('Cliente cadastrado')
+    } catch { toast.error('Erro ao cadastrar cliente') }
+    finally { setCadastrando(false) }
+  }
 
   useEffect(() => {
     if (forma === 'pix') gerarQR()
@@ -642,13 +673,64 @@ function PagamentoModal({ total, cliente, itens, descontoGlobal, observacao, onS
         )}
 
         {forma === 'fiado' && (
-          <div className="p-3 rounded-xl text-sm" style={{ background: '#F5A62310', border: '1px solid #F5A62330' }}>
-            {cliente ? (
-              <p>Lançar R$ {total.toFixed(2)} no fiado de <strong>{cliente.nome}</strong></p>
-            ) : (
-              <p style={{ color: '#F5A623' }}>⚠️ Selecione um cliente para venda fiado</p>
-            )}
-          </div>
+          cliente ? (
+            <div className="p-3 rounded-xl text-sm flex items-center justify-between gap-3"
+              style={{ background: '#F5A62310', border: '1px solid #F5A62330' }}>
+              <p>Lançar <strong>{formatCurrency(total)}</strong> no fiado de <strong>{cliente.nome}</strong></p>
+              <button onClick={() => onSetCliente(null)} className="text-xs underline whitespace-nowrap"
+                style={{ color: 'var(--text-secondary)' }}>trocar</button>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <input
+                autoFocus
+                value={fiadoBusca}
+                onChange={e => buscarFiado(e.target.value)}
+                placeholder="Buscar cliente por nome, telefone ou CPF..."
+                className="w-full px-4 py-3 rounded-xl text-sm"
+                style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              />
+              {fiadoResultados.map(c => (
+                <button key={c.id}
+                  onClick={() => { onSetCliente(c); setFiadoBusca(''); setFiadoResultados([]) }}
+                  className="w-full flex items-center gap-3 p-2.5 rounded-xl transition-colors hover:bg-white/5 text-left"
+                  style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs"
+                    style={{ background: '#F5A62320', color: '#F5A623' }}>{c.nome[0]}</div>
+                  <div>
+                    <div className="text-sm font-medium">{c.nome}</div>
+                    <div className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                      {c.telefone} {c.saldo_fiado > 0 ? `• Fiado atual: ${formatCurrency(c.saldo_fiado)}` : ''}
+                    </div>
+                  </div>
+                </button>
+              ))}
+              {fiadoBusca.trim() && fiadoResultados.length === 0 && (
+                <div className="p-3 rounded-xl space-y-2" style={{ background: '#F5A62310', border: '1px solid #F5A62330' }}>
+                  <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>
+                    Nenhum cliente encontrado. Cadastrar <strong style={{ color: 'var(--text-primary)' }}>{fiadoBusca.trim()}</strong>?
+                  </p>
+                  <input
+                    value={novoTel}
+                    onChange={e => setNovoTel(e.target.value)}
+                    placeholder="Telefone (opcional)"
+                    className="w-full px-3 py-2 rounded-lg text-sm"
+                    style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                  />
+                  <button onClick={cadastrarRapido} disabled={cadastrando}
+                    className="w-full py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+                    style={{ background: '#F5A623', color: '#000' }}>
+                    {cadastrando ? 'Cadastrando...' : 'Cadastrar e usar no fiado'}
+                  </button>
+                </div>
+              )}
+              {!fiadoBusca.trim() && (
+                <p className="text-xs px-1" style={{ color: 'var(--text-secondary)' }}>
+                  Digite para buscar um cliente ou cadastrar um novo.
+                </p>
+              )}
+            </div>
+          )
         )}
 
         {/* Observação */}

@@ -144,7 +144,9 @@ export default function Dashboard() {
                   <YAxis tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} width={55} tickFormatter={v => `R$${v}`} />
                   <Tooltip
                     cursor={{ fill: '#F5A62311' }}
-                    contentStyle={{ background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 8 }}
+                    contentStyle={{ background: '#242424', border: '1px solid #3A3A3A', borderRadius: 8, boxShadow: '0 4px 12px rgba(0,0,0,0.4)' }}
+                    labelStyle={{ color: '#FFFFFF', fontWeight: 600, marginBottom: 2 }}
+                    itemStyle={{ color: '#F5A623', fontWeight: 600 }}
                     formatter={(v: number) => [formatCurrency(v), 'Vendas']}
                   />
                   <Bar dataKey="total" radius={[6, 6, 0, 0]} maxBarSize={48}>

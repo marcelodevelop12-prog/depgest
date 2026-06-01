@@ -306,8 +306,8 @@ export default function Relatorios() {
                   </div>
 
                   <div className="rounded-xl overflow-hidden" style={{ border: '1px solid var(--border)' }}>
-                    <div className="px-4 py-3 text-xs font-medium" style={{ background: '#EF444420', color: '#EF4444', borderBottom: '1px solid var(--border)' }}>
-                      INADIMPLENTES (FIADO)
+                    <div className="px-4 py-3 text-xs font-medium" style={{ background: '#F5A62320', color: '#F5A623', borderBottom: '1px solid var(--border)' }}>
+                      FIADO A RECEBER
                     </div>
                     {(dados.inadimplentes || []).map((c: any) => (
                       <div key={c.id} className="flex items-center justify-between px-4 py-3 hover:bg-white/5" style={{ borderBottom: '1px solid var(--border)' }}>
@@ -315,10 +315,10 @@ export default function Relatorios() {
                           <p className="text-sm font-medium">{c.nome}</p>
                           <p className="text-xs" style={{ color: 'var(--text-secondary)' }}>{c.telefone}</p>
                         </div>
-                        <span className="text-sm font-bold" style={{ color: '#EF4444' }}>{formatCurrency(c.saldo_fiado)}</span>
+                        <span className="text-sm font-bold" style={{ color: '#F5A623' }}>{formatCurrency(c.saldo_fiado)}</span>
                       </div>
                     ))}
-                    {(!dados.inadimplentes?.length) && <div className="py-6 text-center text-sm" style={{ color: '#22C55E' }}>✓ Sem inadimplentes</div>}
+                    {(!dados.inadimplentes?.length) && <div className="py-6 text-center text-sm" style={{ color: '#22C55E' }}>✓ Nenhum fiado em aberto</div>}
                   </div>
                 </div>
 

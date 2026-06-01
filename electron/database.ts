@@ -9,7 +9,18 @@ export function initDatabase(dbPath: string): Database.Database {
   db.pragma('foreign_keys = ON')
   db.pragma('synchronous = NORMAL')
   createSchema()
+  runMigrations()
   return db
+}
+
+// Migrações leves para bancos já existentes (ALTER TABLE só roda se a coluna não existir)
+function runMigrations() {
+  const cols = db.prepare(`PRAGMA table_info(fiado_movimentacoes)`).all() as any[]
+  if (!cols.some(c => c.name === 'ciclo_id')) {
+    db.exec(`ALTER TABLE fiado_movimentacoes ADD COLUMN ciclo_id INTEGER REFERENCES fiado_ciclos(id)`)
+  }
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_fiado_ciclo ON fiado_movimentacoes(ciclo_id)`)
+  db.exec(`CREATE INDEX IF NOT EXISTS idx_fiado_ciclos_cliente ON fiado_ciclos(cliente_id)`)
 }
 
 export function getDb(): Database.Database {
@@ -167,6 +178,20 @@ function createSchema() {
       descricao TEXT,
       referencia_pedido_id INTEGER,
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS fiado_ciclos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cliente_id INTEGER NOT NULL REFERENCES clientes(id),
+      numero INTEGER NOT NULL,
+      status TEXT NOT NULL DEFAULT 'fechado' CHECK(status IN ('aberto','fechado')),
+      saldo_inicial REAL DEFAULT 0,
+      total_debitos REAL DEFAULT 0,
+      total_creditos REAL DEFAULT 0,
+      saldo_final REAL DEFAULT 0,
+      aberto_em TEXT,
+      fechado_em TEXT DEFAULT (datetime('now')),
+      observacao TEXT
     );
 
     CREATE TABLE IF NOT EXISTS motoboys (

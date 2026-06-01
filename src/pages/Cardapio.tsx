@@ -119,12 +119,16 @@ export default function Cardapio() {
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !window.api) return
+    const filePath = (file as any).path
+    if (!filePath) { toast.error('Não foi possível ler o arquivo selecionado'); return }
     setUploadingLogo(true)
     try {
-      const url = await window.api.config.uploadLogo((file as any).path)
+      const url = await window.api.config.uploadLogo(filePath)
       setLojaExtra(d => ({ ...d, logo_url: url }))
       toast.success('Logo enviado!')
-    } catch { toast.error('Erro ao enviar logo') }
+    } catch (err: any) {
+      toast.error('Erro ao enviar logo: ' + (err?.message || 'falha desconhecida'))
+    }
     finally { setUploadingLogo(false) }
   }
 

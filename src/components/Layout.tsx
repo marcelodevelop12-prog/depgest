@@ -27,6 +27,35 @@ const NAV = [
   { path: '/configuracoes', icon: Settings, label: 'Configurações' },
 ]
 
+// Aviso sonoro de nova venda online: dois "bips" gerados via Web Audio
+// (não depende de arquivo de áudio empacotado no build).
+function tocarAvisoVendaOnline() {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext
+    if (!Ctx) return
+    const ctx = new Ctx()
+    const tocarTom = (freq: number, inicio: number, duracao: number) => {
+      const osc = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.type = 'sine'
+      osc.frequency.value = freq
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      const t0 = ctx.currentTime + inicio
+      gain.gain.setValueAtTime(0.0001, t0)
+      gain.gain.exponentialRampToValueAtTime(0.3, t0 + 0.03)
+      gain.gain.exponentialRampToValueAtTime(0.0001, t0 + duracao)
+      osc.start(t0)
+      osc.stop(t0 + duracao + 0.02)
+    }
+    tocarTom(880, 0, 0.18)
+    tocarTom(1175, 0.2, 0.25)
+    setTimeout(() => { ctx.close().catch(() => {}) }, 800)
+  } catch {
+    // navegador pode bloquear áudio sem interação do usuário — ignora silenciosamente
+  }
+}
+
 interface Props { children: ReactNode }
 
 export default function Layout({ children }: Props) {
@@ -44,6 +73,9 @@ export default function Layout({ children }: Props) {
     window.api.window.isMaximized().then(setIsMaximized)
     window.api.system.onUpdateAvailable(() => setUpdateStatus('downloading'))
     window.api.system.onUpdateDownloaded(() => setUpdateStatus('ready'))
+
+    // Aviso sonoro para nova venda online (toca em qualquer tela)
+    window.api.cardapio.onPedidoNovo(() => tocarAvisoVendaOnline())
   }, [isElectron])
 
   async function verificarAtualizacao() {

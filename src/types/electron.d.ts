@@ -65,6 +65,9 @@ export interface ElectronAPI {
     lancarFiado: (data: any) => Promise<any>
     pagarFiado: (data: any) => Promise<any>
     extrato: (clienteId: number, periodo?: any) => Promise<any[]>
+    fecharCiclo: (data: any) => Promise<any>
+    listCiclos: (clienteId: number) => Promise<any[]>
+    cicloMovimentacoes: (cicloId: number) => Promise<any[]>
   }
   pedidos: {
     list: (filters?: any) => Promise<any[]>
