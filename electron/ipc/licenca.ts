@@ -2,7 +2,20 @@ import { ipcMain } from 'electron'
 import crypto from 'crypto'
 import os from 'os'
 import { getDb } from '../database'
-import { supabaseAdmin as supabase } from '../lib/supabase'
+import { supabaseAdmin as supabase, supabase as supabaseAnon } from '../lib/supabase'
+
+const CARENCIA_DIAS = 3
+
+// Avalia a carência offline quando não foi possível validar online.
+function avaliarCarencia(lic: any) {
+  const ref = lic?.ultima_validacao || lic?.data_ativacao
+  const refMs = ref ? Date.parse(ref) : NaN
+  if (!isNaN(refMs)) {
+    const dias = (Date.now() - refMs) / 86400000
+    if (dias <= CARENCIA_DIAS) return { liberado: true, offline: true }
+  }
+  return { liberado: false, motivo: 'Conecte à internet para validar sua licença.' }
+}
 
 function getMachineId(): string {
   const hostname = os.hostname()
@@ -45,6 +58,10 @@ export function registerLicenseHandlers() {
         return { ok: false, erro: 'Esta licença está desativada' }
       }
 
+      if (data.bloqueada) {
+        return { ok: false, erro: data.motivo_bloqueio || 'Licença bloqueada. Entre em contato com o suporte DepGest.' }
+      }
+
       if (data.data_expiracao && new Date(data.data_expiracao) < new Date()) {
         return { ok: false, erro: 'Licença expirada' }
       }
@@ -80,6 +97,45 @@ export function registerLicenseHandlers() {
       return { ok: true, licenca: data }
     } catch (err) {
       return { ok: false, erro: 'Erro ao conectar com servidor de licenças. Verifique sua internet.' }
+    }
+  })
+
+  // Heartbeat do protetor: revalida a licença no servidor.
+  // Retorna { liberado, motivo? }. Chamado ao abrir o app e a cada 4h.
+  ipcMain.handle('licenca:validar', async () => {
+    const db = getDb()
+    const lic = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
+    if (!lic || !lic.chave) return { liberado: false, motivo: 'Nenhuma licença ativa.' }
+
+    const machineId = getMachineId()
+
+    try {
+      const { data, error } = await supabaseAnon.functions.invoke('validar-licenca', {
+        body: { chave: lic.chave, machine_id: machineId },
+      })
+      if (error) throw error
+
+      const status = (data as any)?.status
+
+      if (status === 'bloqueada' || status === 'maquina_invalida') {
+        db.prepare('UPDATE licenca SET ativa = 0 WHERE id = ?').run(lic.id)
+        return {
+          liberado: false,
+          bloqueada: true,
+          motivo: (data as any)?.motivo || 'Licença bloqueada. Entre em contato com o suporte DepGest.',
+        }
+      }
+
+      if (status === 'ok') {
+        db.prepare('UPDATE licenca SET ultima_validacao = ? WHERE id = ?').run(new Date().toISOString(), lic.id)
+        return { liberado: true }
+      }
+
+      // Resposta indeterminada (ex.: erro temporário do servidor) → aplica carência.
+      return avaliarCarencia(lic)
+    } catch {
+      // Sem internet / função inacessível → carência offline.
+      return avaliarCarencia(lic)
     }
   })
 }

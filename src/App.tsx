@@ -75,6 +75,7 @@ function UpdateBanner() {
 
 export default function App() {
   const [status, setStatus] = useState<AppStatus>('loading')
+  const [bloqueioMsg, setBloqueioMsg] = useState('')
   const { setTema, setLicenca, setLoja } = useAppStore()
 
   useEffect(() => {
@@ -101,6 +102,14 @@ export default function App() {
 
       setLicenca(licenca)
 
+      // Protetor: revalida a licença no servidor (heartbeat de abertura)
+      const val = await window.api.licenca.validar()
+      if (val && !val.liberado) {
+        setBloqueioMsg(val.motivo || 'Licença bloqueada. Entre em contato com o suporte DepGest.')
+        setStatus('sem-licenca')
+        return
+      }
+
       // Verifica se loja está configurada
       const loja = await window.api.config.getLoja()
       if (!loja?.nome) {
@@ -114,6 +123,21 @@ export default function App() {
 
     init()
   }, [setTema, setLicenca, setLoja])
+
+  // Protetor: revalida a licença a cada 4 horas em segundo plano.
+  useEffect(() => {
+    if (!window.api) return
+    const id = setInterval(async () => {
+      try {
+        const val = await window.api.licenca.validar()
+        if (val && !val.liberado) {
+          setBloqueioMsg(val.motivo || 'Licença bloqueada. Entre em contato com o suporte DepGest.')
+          setStatus('sem-licenca')
+        }
+      } catch { /* sem internet: a carência offline já é tratada no main */ }
+    }, 4 * 60 * 60 * 1000)
+    return () => clearInterval(id)
+  }, [])
 
   if (status === 'loading') {
     return (
@@ -129,7 +153,7 @@ export default function App() {
   if (status === 'sem-licenca') {
     return (
       <>
-        <Ativacao onSuccess={() => setStatus('onboarding')} />
+        <Ativacao onSuccess={() => { setBloqueioMsg(''); setStatus('onboarding') }} mensagemBloqueio={bloqueioMsg} />
         <Toaster position="bottom-right" toastOptions={{ style: { background: '#1A1A1A', color: '#fff', border: '1px solid #2A2A2A' } }} />
       </>
     )

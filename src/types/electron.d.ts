@@ -18,6 +18,7 @@ export interface ElectronAPI {
   }
   licenca: {
     verificar: (chave: string) => Promise<{ ok: boolean; erro?: string; licenca?: any }>
+    validar: () => Promise<{ liberado: boolean; bloqueada?: boolean; offline?: boolean; motivo?: string }>
     get: () => Promise<any>
     getMachineId: () => Promise<string>
   }

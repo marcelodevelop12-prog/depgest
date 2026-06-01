@@ -25,6 +25,7 @@ const api = {
   // License
   licenca: {
     verificar: (chave: string) => ipcRenderer.invoke('licenca:verificar', chave),
+    validar: () => ipcRenderer.invoke('licenca:validar'),
     get: () => ipcRenderer.invoke('licenca:get'),
     getMachineId: () => ipcRenderer.invoke('licenca:get-machine-id'),
   },

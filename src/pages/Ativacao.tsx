@@ -4,9 +4,10 @@ import toast from 'react-hot-toast'
 
 interface Props {
   onSuccess: () => void
+  mensagemBloqueio?: string
 }
 
-export default function Ativacao({ onSuccess }: Props) {
+export default function Ativacao({ onSuccess, mensagemBloqueio }: Props) {
   const [chave, setChave] = useState('')
   const [loading, setLoading] = useState(false)
   const [erro, setErro] = useState('')
@@ -93,6 +94,14 @@ export default function Ativacao({ onSuccess }: Props) {
                 </p>
               </div>
             </div>
+
+            {mensagemBloqueio && (
+              <div className="flex items-start gap-2 p-3 rounded-lg text-sm mb-4"
+                style={{ background: '#EF444420', border: '1px solid #EF444430', color: '#EF4444' }}>
+                <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+                {mensagemBloqueio}
+              </div>
+            )}
 
             <div className="space-y-4">
               <div>

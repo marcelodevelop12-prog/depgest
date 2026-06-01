@@ -21,6 +21,15 @@ function runMigrations() {
   }
   db.exec(`CREATE INDEX IF NOT EXISTS idx_fiado_ciclo ON fiado_movimentacoes(ciclo_id)`)
   db.exec(`CREATE INDEX IF NOT EXISTS idx_fiado_ciclos_cliente ON fiado_ciclos(cliente_id)`)
+
+  // Protetor de licença: coluna da última validação online.
+  const licCols = db.prepare(`PRAGMA table_info(licenca)`).all() as any[]
+  if (!licCols.some(c => c.name === 'ultima_validacao')) {
+    db.exec(`ALTER TABLE licenca ADD COLUMN ultima_validacao TEXT`)
+    // Backfill: dá 3 dias de carência fresca a quem já tinha o app instalado,
+    // para ninguém travar indevidamente no momento da atualização.
+    db.exec(`UPDATE licenca SET ultima_validacao = datetime('now') WHERE ultima_validacao IS NULL`)
+  }
 }
 
 export function getDb(): Database.Database {
