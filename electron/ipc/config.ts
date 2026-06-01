@@ -4,7 +4,7 @@ import { getDb } from '../database'
 import path from 'path'
 import fs from 'fs'
 import { execSync } from 'child_process'
-import { supabaseAdmin as supabase, hasServiceKey } from '../lib/supabase'
+import { supabaseAdmin as supabase, supabase as supabaseAnon } from '../lib/supabase'
 
 function getConfig(chave: string): string | null {
   const db = getDb()
@@ -145,14 +145,9 @@ export function registerConfigHandlers() {
     if (!filePath || !fs.existsSync(filePath)) {
       throw new Error('Arquivo de imagem não encontrado')
     }
-    if (!hasServiceKey) {
-      throw new Error('Esta instalação não tem a chave de envio configurada — não é possível enviar o logo para o servidor.')
-    }
 
     const licenca = db.prepare('SELECT * FROM licenca LIMIT 1').get() as any
     const ext = path.extname(filePath).slice(1).toLowerCase() || 'jpg'
-    const mimeType = ext === 'jpg' ? 'image/jpeg' : `image/${ext}`
-    const storagePath = `logos/${licenca?.supabase_loja_id || 'loja'}/${Date.now()}.${ext}`
 
     let fileBuffer: Buffer
     try {
@@ -161,19 +156,23 @@ export function registerConfigHandlers() {
       throw new Error('Não foi possível ler a imagem: ' + (e?.message || 'erro de leitura'))
     }
 
-    const { error } = await supabase.storage
-      .from('lojas')
-      .upload(storagePath, fileBuffer, { contentType: mimeType, upsert: true })
+    // Upload via Edge Function (a chave admin fica no servidor; o app usa a chave pública).
+    const { data, error } = await supabaseAnon.functions.invoke('upload-logo', {
+      body: {
+        fileBase64: fileBuffer.toString('base64'),
+        ext,
+        lojaId: licenca?.supabase_loja_id || null,
+      },
+    })
 
-    if (error) throw new Error('Falha no envio (storage): ' + error.message)
-
-    const { data: { publicUrl } } = supabase.storage.from('lojas').getPublicUrl(storagePath)
+    if (error) throw new Error('Falha no envio do logo: ' + error.message)
+    const publicUrl = (data as any)?.publicUrl
+    if (!publicUrl) {
+      const serverErr = (data as any)?.error
+      throw new Error('Falha no envio do logo: ' + (serverErr || 'resposta inválida do servidor'))
+    }
 
     db.prepare('INSERT OR REPLACE INTO configuracoes (chave, valor) VALUES (?, ?)').run('loja_logo_url', publicUrl)
-
-    if (licenca?.supabase_loja_id) {
-      supabase.from('lojas').update({ logo_url: publicUrl }).eq('id', licenca.supabase_loja_id).then(() => {})
-    }
 
     return publicUrl
   })
