@@ -1,6 +1,6 @@
 {
   "name": "depgest",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "description": "Sistema de Gestão para Depósito de Bebidas",
   "author": "DepGest",
   "main": "dist-electron/main.js",

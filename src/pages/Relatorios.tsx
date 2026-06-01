@@ -9,6 +9,15 @@ type Aba = 'vendas' | 'estoque' | 'clientes' | 'entregas'
 const hojeStr = new Date().toISOString().split('T')[0]
 const inicioMes = hojeStr.slice(0, 8) + '01'
 
+function ultimosDias(n: number) {
+  const inicio = new Date(Date.now() - (n - 1) * 86400000).toISOString().split('T')[0]
+  return { inicio, fim: hojeStr }
+}
+function isUltimosDias(periodo: { inicio: string; fim: string }, n: number) {
+  const alvo = ultimosDias(n)
+  return periodo.inicio === alvo.inicio && periodo.fim === alvo.fim
+}
+
 const COLORS = ['#F5A623', '#22C55E', '#3B82F6', '#A855F7', '#EF4444', '#F59E0B']
 
 export default function Relatorios() {
@@ -101,15 +110,33 @@ export default function Relatorios() {
 
         {/* Filtro período */}
         {(aba === 'vendas' || aba === 'entregas') && (
-          <div className="flex items-center gap-3 mt-3">
+          <div className="flex items-center gap-3 mt-3 flex-wrap">
             <span className="text-xs" style={{ color: 'var(--text-secondary)' }}>Período:</span>
             <input type="date" value={periodo.inicio} onChange={e => setPeriodo(p => ({ ...p, inicio: e.target.value }))}
-              className="px-3 py-1.5 rounded-lg text-xs"
+              onClick={e => (e.currentTarget as any).showPicker?.()}
+              className="px-3 py-1.5 rounded-lg text-xs cursor-pointer"
               style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
             <span style={{ color: 'var(--text-secondary)' }}>até</span>
             <input type="date" value={periodo.fim} onChange={e => setPeriodo(p => ({ ...p, fim: e.target.value }))}
-              className="px-3 py-1.5 rounded-lg text-xs"
+              onClick={e => (e.currentTarget as any).showPicker?.()}
+              className="px-3 py-1.5 rounded-lg text-xs cursor-pointer"
               style={{ background: 'var(--bg)', border: '1px solid var(--border)', color: 'var(--text-primary)' }} />
+            <div className="flex gap-1 ml-1">
+              {[7, 15, 30].map(n => {
+                const ativo = isUltimosDias(periodo, n)
+                return (
+                  <button key={n} onClick={() => setPeriodo(ultimosDias(n))}
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors"
+                    style={{
+                      background: ativo ? '#F5A623' : 'var(--bg)',
+                      color: ativo ? '#000' : 'var(--text-secondary)',
+                      border: '1px solid var(--border)',
+                    }}>
+                    {n} dias
+                  </button>
+                )
+              })}
+            </div>
           </div>
         )}
       </div>

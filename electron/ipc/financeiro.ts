@@ -43,7 +43,7 @@ export function registerFinanceiroHandlers() {
       SELECT date(cm.created_at) as data, SUM(cm.valor) as total
       FROM caixa_movimentacoes cm
       JOIN caixa_sessoes cs ON cs.id = cm.sessao_id
-      WHERE cm.tipo = 'entrada' AND cm.created_at BETWEEN ? AND ?
+      WHERE cm.tipo = 'entrada' AND date(cm.created_at) BETWEEN date(?) AND date(?)
       GROUP BY date(cm.created_at)
       ORDER BY data
     `).all(periodo.inicio, periodo.fim)
@@ -51,14 +51,14 @@ export function registerFinanceiroHandlers() {
     const saidas = db.prepare(`
       SELECT date(created_at) as data, SUM(valor) as total
       FROM financeiro_contas
-      WHERE tipo = 'pagar' AND pago = 1 AND data_pagamento BETWEEN ? AND ?
+      WHERE tipo = 'pagar' AND pago = 1 AND date(data_pagamento) BETWEEN date(?) AND date(?)
       GROUP BY data ORDER BY data
     `).all(periodo.inicio, periodo.fim)
 
     const fiadoRecebido = db.prepare(`
       SELECT date(created_at) as data, SUM(valor) as total
       FROM fiado_movimentacoes
-      WHERE tipo = 'credito' AND created_at BETWEEN ? AND ?
+      WHERE tipo = 'credito' AND date(created_at) BETWEEN date(?) AND date(?)
       GROUP BY data ORDER BY data
     `).all(periodo.inicio, periodo.fim)
 
@@ -71,19 +71,19 @@ export function registerFinanceiroHandlers() {
     const receitas = db.prepare(`
       SELECT SUM(cm.valor) as total
       FROM caixa_movimentacoes cm
-      WHERE cm.tipo = 'entrada' AND cm.created_at BETWEEN ? AND ?
+      WHERE cm.tipo = 'entrada' AND date(cm.created_at) BETWEEN date(?) AND date(?)
     `).get(periodo.inicio, periodo.fim) as any
 
     const custos = db.prepare(`
       SELECT SUM(ic.total) as total
       FROM itens_compra ic
       JOIN compras c ON c.id = ic.compra_id
-      WHERE c.status = 'recebida' AND c.data_compra BETWEEN ? AND ?
+      WHERE c.status = 'recebida' AND date(c.data_compra) BETWEEN date(?) AND date(?)
     `).get(periodo.inicio, periodo.fim) as any
 
     const despesas = db.prepare(`
       SELECT SUM(valor_pago) as total FROM financeiro_contas
-      WHERE tipo = 'pagar' AND pago = 1 AND data_pagamento BETWEEN ? AND ?
+      WHERE tipo = 'pagar' AND pago = 1 AND date(data_pagamento) BETWEEN date(?) AND date(?)
     `).get(periodo.inicio, periodo.fim) as any
 
     const receitaBruta = receitas?.total || 0

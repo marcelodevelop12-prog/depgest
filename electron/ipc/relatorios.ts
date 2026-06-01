@@ -8,13 +8,13 @@ export function registerRelatorioHandlers() {
 
     const totalPorDia = db.prepare(`
       SELECT date(created_at) as data, COUNT(*) as pedidos, SUM(total) as total
-      FROM pedidos WHERE status != 'cancelado' AND created_at BETWEEN ? AND ?
+      FROM pedidos WHERE status != 'cancelado' AND date(created_at) BETWEEN date(?) AND date(?)
       GROUP BY date(created_at) ORDER BY data
     `).all(inicio, fim)
 
     const porFormaPagamento = db.prepare(`
       SELECT forma_pagamento, COUNT(*) as pedidos, SUM(total) as total
-      FROM pedidos WHERE status != 'cancelado' AND created_at BETWEEN ? AND ?
+      FROM pedidos WHERE status != 'cancelado' AND date(created_at) BETWEEN date(?) AND date(?)
       GROUP BY forma_pagamento
     `).all(inicio, fim)
 
@@ -22,20 +22,20 @@ export function registerRelatorioHandlers() {
       SELECT ip.nome, SUM(ip.quantidade) as quantidade, SUM(ip.total) as total
       FROM itens_pedido ip
       JOIN pedidos p ON p.id = ip.pedido_id
-      WHERE p.status != 'cancelado' AND p.created_at BETWEEN ? AND ?
+      WHERE p.status != 'cancelado' AND date(p.created_at) BETWEEN date(?) AND date(?)
       GROUP BY ip.nome ORDER BY total DESC LIMIT 20
     `).all(inicio, fim)
 
     const porOrigem = db.prepare(`
       SELECT origem, COUNT(*) as pedidos, SUM(total) as total
-      FROM pedidos WHERE status != 'cancelado' AND created_at BETWEEN ? AND ?
+      FROM pedidos WHERE status != 'cancelado' AND date(created_at) BETWEEN date(?) AND date(?)
       GROUP BY origem
     `).all(inicio, fim)
 
     const totais = db.prepare(`
       SELECT COUNT(*) as total_pedidos, SUM(total) as total_vendas,
         AVG(total) as ticket_medio
-      FROM pedidos WHERE status != 'cancelado' AND created_at BETWEEN ? AND ?
+      FROM pedidos WHERE status != 'cancelado' AND date(created_at) BETWEEN date(?) AND date(?)
     `).get(inicio, fim) as any
 
     return { totalPorDia, porFormaPagamento, topProdutos, porOrigem, totais }
@@ -107,7 +107,7 @@ export function registerRelatorioHandlers() {
         SUM(CASE WHEN e.status = 'entregue' THEN 1 ELSE 0 END) as entregues
       FROM motoboys m
       LEFT JOIN entregas e ON e.motoboy_id = m.id
-      ${inicio ? 'WHERE e.created_at BETWEEN ? AND ?' : ''}
+      ${inicio ? 'WHERE date(e.created_at) BETWEEN date(?) AND date(?)' : ''}
       GROUP BY m.id ORDER BY total_entregas DESC
     `).all(...(inicio ? [inicio, fim] : []))
 

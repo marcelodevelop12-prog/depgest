@@ -122,8 +122,8 @@ export function registerClienteHandlers() {
       WHERE fm.cliente_id = ?
     `
     const params: any[] = [clienteId]
-    if (periodo.inicio) { sql += ' AND fm.created_at >= ?'; params.push(periodo.inicio) }
-    if (periodo.fim) { sql += ' AND fm.created_at <= ?'; params.push(periodo.fim) }
+    if (periodo.inicio) { sql += ' AND date(fm.created_at) >= date(?)'; params.push(periodo.inicio) }
+    if (periodo.fim) { sql += ' AND date(fm.created_at) <= date(?)'; params.push(periodo.fim) }
     sql += ' ORDER BY fm.created_at DESC'
     return db.prepare(sql).all(...params)
   })

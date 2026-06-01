@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ShoppingCart, Package, Clock, CheckCircle, AlertTriangle, TrendingUp, Users, Wallet } from 'lucide-react'
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts'
 import { formatCurrency, formatDateTime, statusLabel } from '../lib/utils'
 import { useNavigate } from 'react-router-dom'
 
@@ -33,12 +33,13 @@ export default function Dashboard() {
   const navigate = useNavigate()
   const [data, setData] = useState<DashData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [diasVendas, setDiasVendas] = useState(7)
 
   useEffect(() => {
     loadData()
     const interval = setInterval(loadData, 30000)
     return () => clearInterval(interval)
-  }, [])
+  }, [diasVendas])
 
   async function loadData() {
     if (!window.api) {
@@ -50,10 +51,10 @@ export default function Dashboard() {
 
     try {
       const hoje = new Date().toISOString().split('T')[0]
-      const seteDiasAtras = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0]
+      const inicioPeriodo = new Date(Date.now() - (diasVendas - 1) * 86400000).toISOString().split('T')[0]
       const [pedidos, vendas, estoque, caixa, clientes] = await Promise.all([
         window.api.pedidos.list({ data: hoje }),
-        window.api.relatorios.vendas({ inicio: seteDiasAtras + ' 00:00:00', fim: hoje + ' 23:59:59' }),
+        window.api.relatorios.vendas({ inicio: inicioPeriodo + ' 00:00:00', fim: hoje + ' 23:59:59' }),
         window.api.estoque.alertas(),
         window.api.caixa.getResumo(),
         window.api.clientes.list({ com_fiado: true }),
@@ -64,9 +65,14 @@ export default function Dashboard() {
       const totalHoje = pedidos.filter((p: any) => p.status !== 'cancelado').reduce((s: number, p: any) => s + p.total, 0)
       const totalFiado = clientes.reduce((s: number, c: any) => s + (c.saldo_fiado || 0), 0)
 
-      const vendasSemana = (vendas?.totalPorDia || []).map((d: any) => {
-        const [y, m, dia] = String(d.data).split('-')
-        return { data: `${dia}/${m}`, total: d.total || 0 }
+      // Monta o período completo, preenchendo com 0 os dias sem venda
+      const porDia: Record<string, number> = {}
+      for (const d of vendas?.totalPorDia || []) porDia[String(d.data)] = d.total || 0
+      const vendasSemana = Array.from({ length: diasVendas }, (_, i) => {
+        const dt = new Date(Date.now() - (diasVendas - 1 - i) * 86400000)
+        const iso = dt.toISOString().split('T')[0]
+        const [, m, dia] = iso.split('-')
+        return { data: `${dia}/${m}`, total: porDia[iso] || 0 }
       })
 
       setData({
@@ -114,24 +120,39 @@ export default function Dashboard() {
         <div className="grid grid-cols-3 gap-4">
           {/* Gráfico vendas semana */}
           <div className="col-span-2 rounded-2xl p-5" style={{ background: 'var(--card)', border: '1px solid var(--border)' }}>
-            <h3 className="font-semibold mb-4">Vendas da Semana</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold">Vendas {diasVendas === 7 ? 'da Semana' : `(${diasVendas} dias)`}</h3>
+              <div className="flex gap-1">
+                {[7, 15, 30].map(n => (
+                  <button key={n} onClick={() => setDiasVendas(n)}
+                    className="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors"
+                    style={{
+                      background: diasVendas === n ? '#F5A623' : 'transparent',
+                      color: diasVendas === n ? '#000' : 'var(--text-secondary)',
+                      border: '1px solid var(--border)',
+                    }}>
+                    {n}d
+                  </button>
+                ))}
+              </div>
+            </div>
             {d.vendasSemana.length > 0 ? (
               <ResponsiveContainer width="100%" height={180}>
-                <AreaChart data={d.vendasSemana}>
-                  <defs>
-                    <linearGradient id="gradVendas" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#F5A623" stopOpacity={0.3} />
-                      <stop offset="95%" stopColor="#F5A623" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="data" tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} tickFormatter={v => `R$${v}`} />
+                <BarChart data={d.vendasSemana} barCategoryGap={diasVendas > 7 ? '15%' : '25%'}>
+                  <XAxis dataKey="data" tick={{ fontSize: 12, fill: '#888' }} axisLine={false} tickLine={false}
+                    interval={diasVendas === 7 ? 0 : diasVendas === 15 ? 1 : 3} />
+                  <YAxis tick={{ fontSize: 11, fill: '#888' }} axisLine={false} tickLine={false} width={55} tickFormatter={v => `R$${v}`} />
                   <Tooltip
+                    cursor={{ fill: '#F5A62311' }}
                     contentStyle={{ background: '#1A1A1A', border: '1px solid #2A2A2A', borderRadius: 8 }}
                     formatter={(v: number) => [formatCurrency(v), 'Vendas']}
                   />
-                  <Area type="monotone" dataKey="total" stroke="#F5A623" strokeWidth={2} fill="url(#gradVendas)" />
-                </AreaChart>
+                  <Bar dataKey="total" radius={[6, 6, 0, 0]} maxBarSize={48}>
+                    {d.vendasSemana.map((_, i) => (
+                      <Cell key={i} fill="#F5A623" />
+                    ))}
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             ) : (
               <div className="h-44 flex items-center justify-center text-sm" style={{ color: 'var(--text-secondary)' }}>

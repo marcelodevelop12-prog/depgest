@@ -71,8 +71,8 @@ export function registerEstoqueHandlers() {
 
     if (filters.produto_id) { sql += ' AND em.produto_id = ?'; params.push(filters.produto_id) }
     if (filters.tipo) { sql += ' AND em.tipo = ?'; params.push(filters.tipo) }
-    if (filters.data_inicio) { sql += ' AND em.created_at >= ?'; params.push(filters.data_inicio) }
-    if (filters.data_fim) { sql += ' AND em.created_at <= ?'; params.push(filters.data_fim) }
+    if (filters.data_inicio) { sql += ' AND date(em.created_at) >= date(?)'; params.push(filters.data_inicio) }
+    if (filters.data_fim) { sql += ' AND date(em.created_at) <= date(?)'; params.push(filters.data_fim) }
 
     sql += ' ORDER BY em.created_at DESC'
     if (filters.limit) { sql += ` LIMIT ${filters.limit}` }
