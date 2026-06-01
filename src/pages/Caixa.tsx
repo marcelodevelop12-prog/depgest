@@ -90,9 +90,9 @@ export default function Caixa() {
       const s = await window.api.caixa.getSessaoAtiva()
       setSessao(s)
       if (s) {
-        const [r, m] = await Promise.all([window.api.caixa.getResumo(), Promise.resolve([])])
+        const [r, m] = await Promise.all([window.api.caixa.getResumo(), window.api.caixa.listMovimentacoes()])
         setResumo(r)
-        setMovs(m)
+        setMovs(m as Movimentacao[])
       }
       const hist = await window.api.caixa.getHistorico()
       setHistorico(hist)

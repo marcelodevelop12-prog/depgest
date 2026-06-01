@@ -62,7 +62,7 @@ export function registerEstoqueHandlers() {
   ipcMain.handle('estoque:list-movimentacoes', (_, filters: any = {}) => {
     const db = getDb()
     let sql = `
-      SELECT em.*, p.nome as produto_nome
+      SELECT em.*, em.saldo_posterior as saldo_apos, p.nome as produto_nome
       FROM estoque_movimentacoes em
       JOIN produtos p ON p.id = em.produto_id
       WHERE 1=1

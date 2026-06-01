@@ -195,6 +195,9 @@ export function registerPedidoHandlers() {
     } else if (status === 'entregue') {
       db.prepare(`UPDATE pedidos SET status = 'entregue', updated_at = datetime('now') WHERE id = ?`).run(id)
       db.prepare(`UPDATE entregas SET status = 'entregue', entregue_as = datetime('now') WHERE pedido_id = ? AND status = 'em_andamento'`).run(id)
+    } else if (status === 'cancelado') {
+      db.prepare(`UPDATE pedidos SET status = 'cancelado', motivo_cancelamento = ?, updated_at = datetime('now') WHERE id = ?`)
+        .run(extra.motivo_cancelamento || extra.motivo || null, id)
     } else {
       db.prepare(`UPDATE pedidos SET status = ?, updated_at = datetime('now') WHERE id = ?`).run(status, id)
     }

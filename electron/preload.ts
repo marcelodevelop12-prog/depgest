@@ -105,6 +105,7 @@ const api = {
     movimentar: (data: Record<string, unknown>) => ipcRenderer.invoke('caixa:movimentar', data),
     getResumo: () => ipcRenderer.invoke('caixa:get-resumo'),
     getHistorico: (filters?: Record<string, unknown>) => ipcRenderer.invoke('caixa:get-historico', filters),
+    listMovimentacoes: (sessaoId?: number) => ipcRenderer.invoke('caixa:list-movimentacoes', sessaoId),
   },
 
   // Motoboys

@@ -52,7 +52,7 @@ export function registerCaixaHandlers() {
     db.prepare(`
       UPDATE caixa_sessoes SET status = 'fechado', fechamento = datetime('now'), valor_final = ?, observacoes = ?
       WHERE id = ?
-    `).run(data.valor_final || 0, data.observacoes || null, sessao.id)
+    `).run(data.valor_final ?? data.contagem_fisica ?? 0, data.observacoes || null, sessao.id)
 
     return { ok: true }
   })
@@ -81,26 +81,64 @@ export function registerCaixaHandlers() {
       GROUP BY forma_pagamento
     `).all(sessao.id) as any[]
 
-    const saidas = db.prepare(`
+    const sangrias = db.prepare(`
       SELECT SUM(valor) as total FROM caixa_movimentacoes
-      WHERE sessao_id = ? AND tipo IN ('saida', 'sangria')
+      WHERE sessao_id = ? AND tipo = 'sangria'
     `).get(sessao.id) as any
 
-    const totalEntradas = entradas.reduce((s, e) => s + e.total, 0)
+    const suprimentos = db.prepare(`
+      SELECT SUM(valor) as total FROM caixa_movimentacoes
+      WHERE sessao_id = ? AND tipo = 'suprimento'
+    `).get(sessao.id) as any
+
+    const outrasSaidas = db.prepare(`
+      SELECT SUM(valor) as total FROM caixa_movimentacoes
+      WHERE sessao_id = ? AND tipo = 'saida'
+    `).get(sessao.id) as any
+
+    const porForma: Record<string, number> = { dinheiro: 0, pix: 0, debito: 0, credito: 0 }
+    let totalEntradas = 0
+    for (const e of entradas) {
+      totalEntradas += e.total || 0
+      if (e.forma_pagamento && porForma[e.forma_pagamento] !== undefined) {
+        porForma[e.forma_pagamento] += e.total || 0
+      }
+    }
+
+    const totalSangrias = sangrias?.total || 0
+    const totalSuprimentos = suprimentos?.total || 0
+    const totalOutrasSaidas = outrasSaidas?.total || 0
 
     return {
       sessao,
+      ...porForma,
       entradas,
       total_entradas: totalEntradas,
-      total_saidas: saidas?.total || 0,
-      saldo_esperado: sessao.valor_inicial + totalEntradas - (saidas?.total || 0),
+      total_sangrias: totalSangrias,
+      total_suprimentos: totalSuprimentos,
+      total_saidas: totalSangrias + totalOutrasSaidas,
+      saldo_esperado: sessao.valor_inicial + totalEntradas + totalSuprimentos - totalSangrias - totalOutrasSaidas,
     }
   })
 
   ipcMain.handle('caixa:get-historico', (_, filters: any = {}) => {
     const db = getDb()
     return db.prepare(`
-      SELECT * FROM caixa_sessoes ORDER BY abertura DESC LIMIT 30
+      SELECT cs.*,
+        (SELECT COALESCE(SUM(valor),0) FROM caixa_movimentacoes WHERE sessao_id = cs.id AND tipo = 'entrada') as total_entradas,
+        (SELECT COALESCE(SUM(valor),0) FROM caixa_movimentacoes WHERE sessao_id = cs.id AND tipo = 'sangria') as total_sangrias
+      FROM caixa_sessoes cs ORDER BY cs.abertura DESC LIMIT 30
     `).all()
+  })
+
+  ipcMain.handle('caixa:list-movimentacoes', (_, sessaoId?: number) => {
+    const db = getDb()
+    let id = sessaoId
+    if (!id) {
+      const sessao = db.prepare("SELECT id FROM caixa_sessoes WHERE status = 'aberto' ORDER BY id DESC LIMIT 1").get() as any
+      id = sessao?.id
+    }
+    if (!id) return []
+    return db.prepare('SELECT * FROM caixa_movimentacoes WHERE sessao_id = ? ORDER BY created_at DESC, id DESC').all(id)
   })
 }

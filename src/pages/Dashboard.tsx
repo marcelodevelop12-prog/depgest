@@ -16,6 +16,19 @@ interface DashData {
   alertas: { estoqueMinimo: any[]; contasVencer: any[] }
 }
 
+function resumoItens(itens: any): string {
+  try {
+    const arr = typeof itens === 'string' ? JSON.parse(itens) : itens
+    if (!Array.isArray(arr)) return ''
+    return arr
+      .filter((i: any) => i && i.nome)
+      .map((i: any) => `${i.quantidade}x ${i.nome}`)
+      .join(', ')
+  } catch {
+    return ''
+  }
+}
+
 export default function Dashboard() {
   const navigate = useNavigate()
   const [data, setData] = useState<DashData | null>(null)
@@ -37,9 +50,10 @@ export default function Dashboard() {
 
     try {
       const hoje = new Date().toISOString().split('T')[0]
-      const [pedidos, pedidosSemana, estoque, caixa, clientes] = await Promise.all([
+      const seteDiasAtras = new Date(Date.now() - 6 * 86400000).toISOString().split('T')[0]
+      const [pedidos, vendas, estoque, caixa, clientes] = await Promise.all([
         window.api.pedidos.list({ data: hoje }),
-        Promise.resolve([]),
+        window.api.relatorios.vendas({ inicio: seteDiasAtras + ' 00:00:00', fim: hoje + ' 23:59:59' }),
         window.api.estoque.alertas(),
         window.api.caixa.getResumo(),
         window.api.clientes.list({ com_fiado: true }),
@@ -50,6 +64,11 @@ export default function Dashboard() {
       const totalHoje = pedidos.filter((p: any) => p.status !== 'cancelado').reduce((s: number, p: any) => s + p.total, 0)
       const totalFiado = clientes.reduce((s: number, c: any) => s + (c.saldo_fiado || 0), 0)
 
+      const vendasSemana = (vendas?.totalPorDia || []).map((d: any) => {
+        const [y, m, dia] = String(d.data).split('-')
+        return { data: `${dia}/${m}`, total: d.total || 0 }
+      })
+
       setData({
         totalVendasHoje: totalHoje,
         pedidosHoje: pedidos.length,
@@ -57,8 +76,8 @@ export default function Dashboard() {
         pedidosEntregues: entregues.length,
         totalFiado,
         saldoCaixa: caixa?.saldo_esperado || 0,
-        vendasSemana: [],
-        ultimosPedidos: pedidos.slice(0, 8),
+        vendasSemana,
+        ultimosPedidos: pedidos.slice(0, 8).map((p: any) => ({ ...p, itens_resumo: resumoItens(p.itens) })),
         alertas: { estoqueMinimo: estoque, contasVencer: [] },
       })
     } catch {

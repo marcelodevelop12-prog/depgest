@@ -84,6 +84,7 @@ export interface ElectronAPI {
     movimentar: (data: any) => Promise<any>
     getResumo: () => Promise<any>
     getHistorico: (filters?: any) => Promise<any[]>
+    listMovimentacoes: (sessaoId?: number) => Promise<any[]>
   }
   motoboys: {
     list: () => Promise<any[]>
