@@ -21,6 +21,7 @@ export default function Cardapio() {
   const logoInputRef = useRef<HTMLInputElement>(null)
   const [pedidosOnline, setPedidosOnline] = useState<any[]>([])
   const [aba, setAba] = useState<'config' | 'produtos' | 'pedidos'>('config')
+  const [fotosUrl, setFotosUrl] = useState<Record<number, string>>({})
 
   // Modal de edição por produto
   const [editProduto, setEditProduto] = useState<any>(null)
@@ -74,6 +75,12 @@ export default function Cardapio() {
     if (!window.api) { setProdutos(mockProdutos); return }
     const result = await window.api.produtos.list({ ativo: true })
     setProdutos(result)
+    // Carrega as foto_url do Supabase (cardápio) e guarda no state.
+    // As fotos exibidas vêm sempre da URL pública — nunca do caminho local.
+    try {
+      const fotos = await window.api.cardapio.getFotos()
+      setFotosUrl(fotos || {})
+    } catch { /* sem internet: lista segue sem fotos */ }
   }
 
   async function loadPedidosOnline() {
@@ -168,17 +175,13 @@ export default function Cardapio() {
     }
   }
 
-  function pathToImgSrc(p: string): string {
-    // Usa protocolo customizado registrado no main process — sem bloqueio de CSP
-    return 'local-image://' + p.replace(/\\/g, '/')
-  }
-
   function abrirEditProduto(e: React.MouseEvent, produto: any) {
     e.stopPropagation()
     setEditProduto(produto)
     setEditDescricao(produto.descricao || '')
     setEditFotoPath('')
-    setEditFotoPreview(produto.foto_path ? pathToImgSrc(produto.foto_path) : '')
+    // Mostra a foto atual a partir da URL pública do Supabase (nunca o caminho local).
+    setEditFotoPreview(fotosUrl[produto.id] || '')
   }
 
   function handleProdutoFotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
@@ -204,6 +207,7 @@ export default function Cardapio() {
       if (editFotoPath && window.api) {
         const r = await window.api.cardapio.uploadFoto(String(editProduto.id), editFotoPath)
         if (!r?.ok) throw new Error(r?.erro || 'Erro ao enviar foto')
+        if (r.foto_url) setFotosUrl(prev => ({ ...prev, [editProduto.id]: r.foto_url as string }))
         toast.success('Foto enviada para o cardápio online!')
       }
 
@@ -477,10 +481,10 @@ export default function Cardapio() {
                     }}>
                     {selecionados.has(p.id) && <span className="text-xs font-bold text-black">✓</span>}
                   </div>
-                  {p.foto_path && (
-                    <img src={pathToImgSrc(p.foto_path)} className="w-12 h-12 rounded-lg object-cover" />
+                  {fotosUrl[p.id] && (
+                    <img src={fotosUrl[p.id]} className="w-12 h-12 rounded-lg object-cover" />
                   )}
-                  {!p.foto_path && (
+                  {!fotosUrl[p.id] && (
                     <div className="w-12 h-12 rounded-lg flex items-center justify-center" style={{ background: 'var(--bg)' }}>
                       <Package size={20} style={{ color: 'var(--text-secondary)' }} />
                     </div>

@@ -131,8 +131,8 @@ export interface ElectronAPI {
     sync: () => Promise<any>
     getProdutos: () => Promise<any[]>
     updateProdutos: (produtoIds: number[]) => Promise<any>
-    getFotos: () => Promise<{ ok: boolean; produtos: any[]; erro?: string }>
-    uploadFoto: (cardapioProdutoId: string, filePath: string) => Promise<{ ok: boolean; url?: string; erro?: string }>
+    getFotos: () => Promise<Record<number, string>>
+    uploadFoto: (produtoLocalId: string, filePath: string) => Promise<{ ok: boolean; foto_url?: string; foto_path?: string; erro?: string }>
     initRealtime: () => void
     onPedidoNovo: (cb: (pedido: unknown) => void) => void
   }

@@ -1,6 +1,6 @@
 import { ipcMain } from 'electron'
 import { getDb } from '../database'
-import { supabaseAdmin as supabase } from '../lib/supabase'
+import { supabaseAdmin as supabase, supabase as supabaseAnon } from '../lib/supabase'
 import fs from 'fs'
 import path from 'path'
 
@@ -37,102 +37,37 @@ export function registerCardapioHandlers() {
 
     if (produtos.length === 0) return { ok: true, synced: 0 }
 
-    // ── PASSO 1: categorias ─────────────────────────────────────────────
-    const cats = [...new Map(
-      produtos.filter(p => p.cat_id)
-        .map(p => [p.cat_id, { id: p.cat_id, nome: p.cat_nome, ordem: p.cat_ordem || 0 }])
-    ).values()]
-
-    const catMap: Record<number, string> = {} // local_id → supabase UUID
-
-    for (const cat of cats) {
-      const { data: ex } = await supabase
-        .from('cardapio_categorias')
-        .select('id')
-        .eq('loja_id', lojaId)
-        .eq('categoria_local_id', cat.id)
-        .maybeSingle()
-
-      if (ex) {
-        await supabase.from('cardapio_categorias')
-          .update({ nome: cat.nome, ordem: cat.ordem, ativa: true })
-          .eq('id', ex.id)
-        catMap[cat.id] = ex.id
-      } else {
-        const { data: ins } = await supabase.from('cardapio_categorias')
-          .insert({ loja_id: lojaId, categoria_local_id: cat.id, nome: cat.nome, ordem: cat.ordem, ativa: true })
-          .select('id')
-          .single()
-        if (ins) catMap[cat.id] = ins.id
-      }
-    }
-
-    // ── PASSO 2: produtos ───────────────────────────────────────────────
-    const prodMap: Record<number, string> = {} // local_id → supabase UUID
-
-    for (const p of produtos) {
-      const categoriaId = p.cat_id ? (catMap[p.cat_id] || null) : null
-
-      const { data: ex } = await supabase
-        .from('cardapio_produtos')
-        .select('id')
-        .eq('loja_id', lojaId)
-        .eq('produto_local_id', p.id)
-        .maybeSingle()
-
-      if (ex) {
-        await supabase.from('cardapio_produtos').update({
-          nome: p.nome,
-          descricao: p.descricao || null,
-          categoria_id: categoriaId,
-          ativo: p.ativo === 1,
-        }).eq('id', ex.id)
-        prodMap[p.id] = ex.id
-      } else {
-        const { data: ins } = await supabase.from('cardapio_produtos')
-          .insert({
-            loja_id: lojaId,
-            produto_local_id: p.id,
-            nome: p.nome,
-            descricao: p.descricao || null,
-            foto_url: null,
-            categoria_id: categoriaId,
-            ativo: true,
-            ordem: 0,
-          })
-          .select('id')
-          .single()
-        if (ins) prodMap[p.id] = ins.id
-      }
-    }
-
-    // ── PASSO 3: unidades (preços) ──────────────────────────────────────
-    for (const p of produtos) {
-      const cardapioProdId = prodMap[p.id]
-      if (!cardapioProdId) continue
-
+    // Monta o payload com categoria + unidades de cada produto. O upsert no
+    // Supabase é feito pela Edge Function `sync-cardapio` (service_role no
+    // servidor), evitando o erro de RLS na versão instalada (que só tem anon).
+    const payload = produtos.map(p => {
       const unidades = db.prepare(`
         SELECT id, tipo, quantidade_base, preco_venda
         FROM produto_unidades WHERE produto_id = ? AND ativo = 1
       `).all(p.id) as any[]
 
-      // Recria unidades: mais simples que upsert por tipo
-      await supabase.from('cardapio_unidades').delete().eq('produto_id', cardapioProdId)
-
-      if (unidades.length > 0) {
-        await supabase.from('cardapio_unidades').insert(
-          unidades.map(u => ({
-            produto_id: cardapioProdId,
-            unidade_local_id: u.id,
-            tipo: u.tipo,
-            quantidade_base: u.quantidade_base,
-            preco: u.preco_venda,
-          }))
-        )
+      return {
+        produto_local_id: p.id,
+        nome: p.nome,
+        descricao: p.descricao || null,
+        ativo: p.ativo === 1,
+        categoria: p.cat_id ? { local_id: p.cat_id, nome: p.cat_nome, ordem: p.cat_ordem || 0 } : null,
+        unidades: unidades.map(u => ({
+          unidade_local_id: u.id,
+          tipo: u.tipo,
+          quantidade_base: u.quantidade_base,
+          preco: u.preco_venda,
+        })),
       }
-    }
+    })
 
-    return { ok: true, synced: produtos.length }
+    const { data, error } = await supabaseAnon.functions.invoke('sync-cardapio', {
+      body: { lojaId, produtos: payload },
+    })
+    if (error) return { ok: false, erro: 'Falha na sincronização: ' + error.message }
+    if ((data as any)?.error) return { ok: false, erro: 'Falha na sincronização: ' + (data as any).error }
+
+    return { ok: true, synced: (data as any)?.synced ?? produtos.length }
   })
 
   ipcMain.handle('cardapio:get-fotos', async () => {
@@ -162,35 +97,20 @@ export function registerCardapioHandlers() {
     if (!fs.existsSync(filePath)) return { ok: false, erro: 'Arquivo não encontrado' }
     const fileBuffer = fs.readFileSync(filePath)
     const ext = path.extname(filePath).toLowerCase().replace('.', '') || 'jpg'
-    const mimeType = ext === 'png' ? 'image/png' : ext === 'gif' ? 'image/gif' : 'image/jpeg'
-    const fileName = `${lojaId}/${produtoLocalId}_${Date.now()}.${ext}`
 
-    // Upload para Supabase Storage
-    const { error: uploadError } = await supabase.storage
-      .from('cardapio-fotos')
-      .upload(fileName, fileBuffer, { contentType: mimeType, upsert: true })
+    // O upload é feito pela Edge Function `upload-foto-produto` (service_role no
+    // servidor), que cria o bucket se necessário e devolve a URL pública. Evita
+    // o "Bucket not found" e o erro de RLS na versão instalada (que só tem anon).
+    const { data, error } = await supabaseAnon.functions.invoke('upload-foto-produto', {
+      body: { fileBase64: fileBuffer.toString('base64'), ext, lojaId, produtoLocalId },
+    })
+    if (error) return { ok: false, erro: 'Falha no envio da foto: ' + error.message }
+    const fotoUrl = (data as any)?.publicUrl
+    if (!fotoUrl) return { ok: false, erro: 'Falha no envio da foto: ' + ((data as any)?.error || 'resposta inválida do servidor') }
 
-    if (uploadError) return { ok: false, erro: uploadError.message }
-
-    // URL pública
-    const { data: urlData } = supabase.storage.from('cardapio-fotos').getPublicUrl(fileName)
-    const fotoUrl = urlData.publicUrl
-
-    // Salva foto_path local no SQLite
+    // Salva foto_path local no SQLite (cache local do caminho original)
     db.prepare('UPDATE produtos SET foto_path = ?, updated_at = datetime(\'now\') WHERE id = ?')
       .run(filePath, produtoLocalId)
-
-    // Atualiza foto_url no cardapio_produtos (se o produto já foi sincronizado)
-    const { data: ex } = await supabase
-      .from('cardapio_produtos')
-      .select('id')
-      .eq('loja_id', lojaId)
-      .eq('produto_local_id', produtoLocalId)
-      .maybeSingle()
-
-    if (ex) {
-      await supabase.from('cardapio_produtos').update({ foto_url: fotoUrl }).eq('id', ex.id)
-    }
 
     return { ok: true, foto_url: fotoUrl, foto_path: filePath }
   })
